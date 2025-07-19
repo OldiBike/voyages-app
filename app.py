@@ -1,3 +1,12 @@
+# ✅ AJOUT : Support des variables locales (.env) - À AJOUTER AU DÉBUT
+try:
+    from dotenv import load_dotenv
+    load_dotenv()  # Charge le fichier .env en local
+    print("✅ Variables locales chargées depuis .env")
+except ImportError:
+    print("⚠️ python-dotenv non installé - variables système utilisées (Railway)")
+except Exception as e:
+    print(f"⚠️ Erreur chargement .env: {e}")
 from flask import Flask, render_template_string, request, jsonify, send_file, session, redirect, url_for
 import requests
 import json
@@ -61,7 +70,7 @@ class RealAPIHotelGatherer:
             # Ne pas lever d'erreur pour éviter le crash, mais loguer
         else:
             print("✅ Clé API Google chargée depuis variable d'environnement")
-        
+    
     def get_real_hotel_photos(self, hotel_name, destination):
         """VRAI appel API Google Places pour récupérer les VRAIES photos de l'hôtel"""
         
@@ -528,14 +537,14 @@ LOGIN_HTML = """
 </html>
 """
 
-# Interface HTML (pas de changements majeurs nécessaires)
 INTERFACE_HTML = """
 <!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🌟 Générateur de Pages Voyage - SÉCURISÉ</title>
+    <title>Générateur de Pages Voyage</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/litepicker/dist/css/litepicker.css"/>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -555,12 +564,16 @@ INTERFACE_HTML = """
         .header {
             background: linear-gradient(135deg, #3B82F6 0%, #60A5FA 100%);
             color: white;
-            padding: 30px;
+            padding: 20px 30px;
             text-align: center;
         }
-        .header h1 {
+        .header-logo {
+            height: 40px;
+            margin-bottom: 10px;
+        }
+        .header p {
             margin: 0;
-            font-size: 2.5em;
+            font-size: 1.1em;
             font-weight: 300;
         }
         .user-info {
@@ -599,10 +612,36 @@ INTERFACE_HTML = """
             border-radius: 8px;
             font-size: 16px;
             transition: border-color 0.3s;
+            box-sizing: border-box;
         }
         input:focus, select:focus {
             outline: none;
             border-color: #3B82F6;
+        }
+        #date_range {
+            cursor: pointer;
+            background-color: white;
+        }
+        .input-with-button {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .input-with-button input {
+            flex-grow: 1;
+        }
+        .search-btn {
+            padding: 8px 12px;
+            font-size: 14px;
+            font-weight: 600;
+            background-color: #e0e0e0;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .search-btn:hover {
+            background-color: #d0d0d0;
         }
         .form-row {
             display: flex;
@@ -656,14 +695,21 @@ INTERFACE_HTML = """
             color: #28a745;
             font-size: 18px;
             font-weight: 600;
+            text-align: center;
         }
         .error {
             color: #dc3545;
             font-size: 18px;
             font-weight: 600;
         }
-        .download-btn {
-            background: #28a745;
+        .button-container {
+            margin-top: 20px;
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .download-btn, .view-btn {
             color: white;
             border: none;
             padding: 12px 30px;
@@ -673,11 +719,21 @@ INTERFACE_HTML = """
             cursor: pointer;
             text-decoration: none;
             display: inline-block;
-            margin-top: 15px;
-            transition: background 0.3s;
+            transition: all 0.3s;
+        }
+        .download-btn {
+            background: #28a745;
         }
         .download-btn:hover {
             background: #218838;
+            transform: translateY(-2px);
+        }
+        .view-btn {
+            background: #3B82F6;
+        }
+        .view-btn:hover {
+            background: #2563EB;
+            transform: translateY(-2px);
         }
         .stats {
             display: grid;
@@ -701,31 +757,20 @@ INTERFACE_HTML = """
             color: #666;
             font-size: 14px;
         }
-        .api-info {
-            background: #e8f5e8;
-            padding: 20px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-        }
-        .api-info h4 {
-            color: #2d5a2d;
-            margin-top: 0;
-        }
-        .security-badge {
-            background: #e8f5e8;
-            color: #2d5a2d;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 10px;
-            font-weight: bold;
+        .pac-container {
+            background-color: #FFF;
+            z-index: 1000;
+            position: fixed;
+            display: inline-block;
+            float: left;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🌟 Générateur SÉCURISÉ</h1>
-            <p>Google Places + YouTube + Gemini = Données 100% sécurisées !</p>
+            <img src="https://static.wixstatic.com/media/5ca515_449af35c8bea462986caf4fd28e02398~mv2.png" alt="Logo" class="header-logo">
+            <p>Générateur de présentation</p>
             <div class="user-info">
                 <span style="color: rgba(255,255,255,0.9);">👤 Connecté : {{ username }}</span>
                 <a href="/logout">🚪 Déconnexion</a>
@@ -733,39 +778,30 @@ INTERFACE_HTML = """
         </div>
         
         <div class="form-container">
-            <div class="api-info">
-                <h4>🔒 SÉCURITÉ ACTIVÉE <span class="security-badge">Variables d'environnement</span></h4>
-                <p><strong>✅ Google Places API :</strong> Chargée de manière sécurisée</p>
-                <p><strong>✅ YouTube API :</strong> Protection par restrictions</p>
-                <p><strong>✅ Gemini API :</strong> Fallback en cas d'erreur</p>
-                <p><strong>🛡️ Sécurité :</strong> Aucune clé exposée publiquement</p>
-            </div>
             
             <form id="voyageForm">
                 <div class="form-row">
                     <div class="form-group">
                         <label for="hotel_name">🏨 Nom de l'hôtel</label>
                         <input type="text" id="hotel_name" name="hotel_name" required 
-                               placeholder="ex: Castello Village Resort">
+                               placeholder="Saisir un nom d'hôtel...">
                     </div>
                     <div class="form-group">
                         <label for="destination">📍 Destination</label>
                         <input type="text" id="destination" name="destination" required 
-                               placeholder="ex: Sissi, Crète">
+                               placeholder="Saisir une destination...">
                     </div>
                 </div>
                 
                 <div class="form-row">
-                    <div class="form-group">
-                        <label for="date_start">🗓️ Date de départ</label>
-                        <input type="date" id="date_start" name="date_start" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="date_end">🗓️ Date de retour</label>
-                        <input type="date" id="date_end" name="date_end" required>
+                    <div class="form-group" style="width: 100%;">
+                        <label for="date_range">🗓️ Période du séjour</label>
+                        <input type="text" id="date_range" readonly placeholder="Cliquez pour choisir les dates">
+                        <input type="hidden" id="date_start" name="date_start">
+                        <input type="hidden" id="date_end" name="date_end">
                     </div>
                 </div>
-                
+
                 <div class="form-row">
                     <div class="form-group">
                         <label for="price">💰 Votre tarif (€)</label>
@@ -773,17 +809,20 @@ INTERFACE_HTML = """
                     </div>
                     <div class="form-group">
                         <label for="booking_price">💳 Tarif Booking.com (€)</label>
-                        <input type="number" id="booking_price" name="booking_price" required placeholder="ex: 3270">
+                        <div class="input-with-button">
+                            <input type="number" id="booking_price" name="booking_price" required placeholder="ex: 3270">
+                            <button type="button" id="searchBookingBtn" class="search-btn" title="Rechercher sur Booking.com">🔎</button>
+                        </div>
                     </div>
                 </div>
                 
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="departure_city">✈️ Ville de départ</label>
-                        <input type="text" id="departure_city" name="departure_city" required placeholder="ex: Charleroi">
+                        <label for="departure_city">✈️ Aéroport de départ</label>
+                        <input type="text" id="departure_city" name="departure_city" required placeholder="Saisir un aéroport...">
                     </div>
                     <div class="form-group">
-                        <label for="stars">⭐ Nombre d'étoiles</label>
+                        <label for="stars">⭐ Catégorie de l'hôtel</label>
                         <select id="stars" name="stars">
                             <option value="3">3⭐</option>
                             <option value="4" selected>4⭐</option>
@@ -793,7 +832,7 @@ INTERFACE_HTML = """
                 </div>
                 
                 <button type="submit" class="generate-btn">
-                    🚀 Générer SÉCURISÉ
+                    🚀 Générer
                 </button>
             </form>
         </div>
@@ -809,22 +848,62 @@ INTERFACE_HTML = """
         
         <div class="result" id="result"></div>
     </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/litepicker/dist/litepicker.js"></script>
     
     <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            
+            const startDateInput = document.getElementById('date_start');
+            const endDateInput = document.getElementById('date_end');
+            const picker = new Litepicker({
+                element: document.getElementById('date_range'),
+                singleMode: false,
+                lang: 'fr-FR',
+                format: 'DD MMMM YYYY',
+                setup: (picker) => {
+                    picker.on('selected', (date1, date2) => {
+                        startDateInput.value = date1.toJSDate().toISOString().split('T')[0];
+                        endDateInput.value = date2.toJSDate().toISOString().split('T')[0];
+                    });
+                },
+            });
+
+            const searchBookingBtn = document.getElementById('searchBookingBtn');
+            searchBookingBtn.addEventListener('click', () => {
+                const hotelName = document.getElementById('hotel_name').value;
+                const checkinDate = document.getElementById('date_start').value;
+                const checkoutDate = document.getElementById('date_end').value;
+
+                if (!hotelName || !checkinDate || !checkoutDate) {
+                    alert("Veuillez d'abord sélectionner un hôtel et des dates.");
+                    return;
+                }
+                
+                const encodedHotel = encodeURIComponent(hotelName);
+                const bookingUrl = `https://www.booking.com/searchresults.html?ss=${encodedHotel}&checkin=${checkinDate}&checkout=${checkoutDate}&group_adults=2&no_rooms=1`;
+                
+                window.open(bookingUrl, '_blank');
+            });
+        });
+
         document.getElementById('voyageForm').addEventListener('submit', function(e) {
             e.preventDefault();
             
             const formData = new FormData(this);
             const data = Object.fromEntries(formData);
             
+            if (!data.date_start || !data.date_end) {
+                alert("Veuillez sélectionner une période de séjour.");
+                return;
+            }
+            
             document.getElementById('loading').style.display = 'block';
             document.getElementById('result').style.display = 'none';
             
             fetch('/generate', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
             })
             .then(response => response.json())
@@ -834,93 +913,121 @@ INTERFACE_HTML = """
                 
                 if (data.success) {
                     document.getElementById('result').innerHTML = `
-                        <div class="success">
-                            ✅ Page générée de manière SÉCURISÉE !
-                        </div>
+                        <div class="success">✅ Page générée avec succès !</div>
                         <div class="stats">
-                            <div class="stat-item">
-                                <div class="stat-number">${data.real_photos_count}</div>
-                                <div class="stat-label">Photos sécurisées</div>
-                            </div>
-                            <div class="stat-item">
-                                <div class="stat-number">${data.real_videos_count}</div>
-                                <div class="stat-label">Vidéos protégées</div>
-                            </div>
-                            <div class="stat-item">
-                                <div class="stat-number">${data.real_reviews_count}</div>
-                                <div class="stat-label">Avis vérifiés</div>
-                            </div>
-                            <div class="stat-item">
-                                <div class="stat-number">${data.real_attractions_count}</div>
-                                <div class="stat-label">Attractions réelles</div>
-                            </div>
-                            <div class="stat-item">
-                                <div class="stat-number">${data.savings}€</div>
-                                <div class="stat-label">Économies</div>
-                            </div>
+                            <div class="stat-item"><div class="stat-number">${data.real_photos_count}</div><div class="stat-label">Photos</div></div>
+                            <div class="stat-item"><div class="stat-number">${data.real_videos_count}</div><div class="stat-label">Vidéos</div></div>
+                            <div class="stat-item"><div class="stat-number">${data.real_reviews_count}</div><div class="stat-label">Avis</div></div>
+                            <div class="stat-item"><div class="stat-number">${data.real_attractions_count}</div><div class="stat-label">Attractions</div></div>
+                            <div class="stat-item"><div class="stat-number">${data.savings}€</div><div class="stat-label">Économies</div></div>
                         </div>
-                        <a href="/download/${data.filename}" class="download-btn" target="_blank">
-                            📥 Télécharger la page HTML
-                        </a>
-                    `;
+                        <div class="button-container">
+                            <a href="/download/${data.filename}" class="download-btn" target="_blank">📥 Télécharger</a>
+                            <a href="/view/${data.filename}" class="view-btn" target="_blank">👁️ Ouvrir la page</a>
+                        </div>`;
                 } else {
-                    document.getElementById('result').innerHTML = `
-                        <div class="error">
-                            ❌ Erreur: ${data.error}
-                        </div>
-                    `;
+                    document.getElementById('result').innerHTML = `<div class="error">❌ Erreur: ${data.error}</div>`;
                 }
             })
             .catch(error => {
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('result').style.display = 'block';
-                document.getElementById('result').innerHTML = `
-                    <div class="error">
-                        ❌ Erreur de connexion: ${error.message}
-                    </div>
-                `;
+                document.getElementById('result').innerHTML = `<div class="error">❌ Erreur de connexion: ${error.message}</div>`;
             });
         });
+
+        function initAutocompletes() {
+            const hotelInput = document.getElementById('hotel_name');
+            const destinationInput = document.getElementById('destination');
+            const departureInput = document.getElementById('departure_city');
+            const starsSelect = document.getElementById('stars');
+
+            const airportOptions = { types: ['airport'] };
+            new google.maps.places.Autocomplete(departureInput, airportOptions);
+
+            const destinationOptions = {
+                types: ['(regions)'],
+                fields: ['geometry', 'name'] 
+            };
+            const destinationAutocomplete = new google.maps.places.Autocomplete(destinationInput, destinationOptions);
+
+            const hotelOptions = { types: ['lodging'] };
+            const hotelAutocomplete = new google.maps.places.Autocomplete(hotelInput, hotelOptions);
+            hotelAutocomplete.setFields(['name', 'rating', 'address_components']);
+
+            destinationAutocomplete.addListener('place_changed', () => {
+                const place = destinationAutocomplete.getPlace();
+                if (place.geometry && place.geometry.viewport) {
+                    hotelAutocomplete.setBounds(place.geometry.viewport);
+                }
+            });
+
+            hotelAutocomplete.addListener('place_changed', () => {
+                const hotelPlace = hotelAutocomplete.getPlace();
+
+                if (hotelPlace.address_components) {
+                    let city = '';
+                    let country = '';
+                    for (const component of hotelPlace.address_components) {
+                        if (component.types.includes('locality')) {
+                            city = component.long_name;
+                        }
+                        if (component.types.includes('country')) {
+                            country = component.long_name;
+                        }
+                    }
+                    if (city && country) {
+                        destinationInput.value = `${city}, ${country}`;
+                    }
+                }
+
+                if (hotelPlace && hotelPlace.rating) {
+                    const rating = parseFloat(hotelPlace.rating);
+                    if (rating >= 4.8) {
+                        starsSelect.value = '5';
+                    } else if (rating >= 3.8) {
+                        starsSelect.value = '4';
+                    } else {
+                        starsSelect.value = '3';
+                    }
+                }
+            });
+        }
     </script>
+    <script async defer src="https://maps.googleapis.com/maps/api/js?key={{ google_api_key }}&libraries=places&callback=initAutocompletes"></script>
 </body>
 </html>
 """
 
 @app.route('/')
 def home():
-    # PROTECTION : Rediriger vers login si pas authentifié
     if not check_auth():
         return redirect(url_for('login'))
     
     username = session.get('username', 'Utilisateur')
-    return render_template_string(INTERFACE_HTML, username=username)
+    google_api_key = os.environ.get('GOOGLE_API_KEY', '')
+    return render_template_string(INTERFACE_HTML, username=username, google_api_key=google_api_key)
 
 @app.route('/generate', methods=['POST'])
 def generate():
-    # PROTECTION : Vérifier l'authentification
     if not check_auth():
         return jsonify({'success': False, 'error': 'Non autorisé - Veuillez vous reconnecter'})
     
     try:
         data = request.get_json()
+        
+        if not data.get('date_start') or not data.get('date_end'):
+            raise ValueError("Les dates de début et de fin sont requises.")
+
         print(f"🚀 GÉNÉRATION SÉCURISÉE pour: {data['hotel_name']} - {data['destination']}")
         
-        # Instancier le collecteur de données réelles
         real_gatherer = RealAPIHotelGatherer()
-        
-        # Collecter TOUTES les données via les vraies APIs
         real_data = real_gatherer.gather_all_real_data(data['hotel_name'], data['destination'])
         
-        # Calculs
         savings = int(data['booking_price']) - int(data['price'])
-        
-        # Génération du HTML avec les VRAIES données
         html_content = generate_travel_page_real_data(data, real_data, savings)
         
-        # Nom du fichier
         filename = f"voyage_secure_{data['hotel_name'].replace(' ', '_').lower()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
-        
-        # Sauvegarder
         filepath = f"./{filename}"
         with open(filepath, 'w', encoding='utf-8') as f:
             f.write(html_content)
@@ -946,8 +1053,6 @@ def generate():
 
 @app.route('/download/<filename>')
 def download_file(filename):
-    """Route pour télécharger le fichier généré"""
-    # PROTECTION : Vérifier l'authentification
     if not check_auth():
         return redirect(url_for('login'))
     
@@ -956,27 +1061,32 @@ def download_file(filename):
     except Exception as e:
         return jsonify({'error': str(e)}), 404
 
-def generate_travel_page_real_data(data, real_data, savings):
-    """Génère le HTML avec les VRAIES données des APIs - VERSION SÉCURISÉE"""
+@app.route('/view/<filename>')
+def view_file(filename):
+    if not check_auth():
+        return redirect(url_for('login'))
     
-    # Formatage des dates
+    try:
+        return send_file(filename)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 404
+
+def generate_travel_page_real_data(data, real_data, savings):
+    
     date_start = datetime.strptime(data['date_start'], '%Y-%m-%d').strftime('%d %B %Y')
     date_end = datetime.strptime(data['date_end'], '%Y-%m-%d').strftime('%d %B %Y')
     
-    # Génération des étoiles
     stars = "⭐" * int(data['stars'])
     
-    # Génération de la galerie avec les VRAIES photos
     image_gallery = ""
     hotel_name = data['hotel_name']
     
     if real_data['photos']:
         for img_url in real_data['photos']:
-            image_gallery += f'<div class="image-item"><img src="{img_url}" alt="Photo réelle de {hotel_name}"></div>\n                    '
+            image_gallery += f'<div class="image-item"><img src="{img_url}" alt="Photo réelle de {hotel_name}"></div>\n'
     else:
         image_gallery = '<p class="text-center text-gray-500">Photos en cours de chargement sécurisé...</p>'
     
-    # Génération des vidéos avec les VRAIES vidéos YouTube
     video_section = ""
     if real_data['videos']:
         for i, video in enumerate(real_data['videos'][:2]):
@@ -988,13 +1098,13 @@ def generate_travel_page_real_data(data, real_data, savings):
                         <iframe src="https://www.youtube.com/embed/{video['id']}" 
                                 title="{video['title']}" 
                                 frameborder="0" 
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                                 allowfullscreen>
                         </iframe>
                     </div>
                     <p class="text-xs text-gray-600 mt-2">{video['title']}</p>
                 </div>"""
     
-    # Génération des VRAIS avis
     reviews_section = ""
     if real_data['reviews']:
         for review in real_data['reviews']:
@@ -1011,27 +1121,18 @@ def generate_travel_page_real_data(data, real_data, savings):
     else:
         reviews_section = '<p class="text-center text-gray-500">Avis en cours de chargement sécurisé...</p>'
     
-    # Génération des attractions avec les VRAIES données Gemini
     destination_section = ""
     icons = {
-        'plages': 'fa-water',
-        'culture': 'fa-monument',
-        'gastronomie': 'fa-utensils',
-        'activites': 'fa-map'
+        'plages': 'fa-water', 'culture': 'fa-monument',
+        'gastronomie': 'fa-utensils', 'activites': 'fa-map'
     }
-    
     colors = {
-        'plages': 'bg-blue-500',
-        'culture': 'bg-purple-500',
-        'gastronomie': 'bg-green-500',
-        'activites': 'bg-orange-500'
+        'plages': 'bg-blue-500', 'culture': 'bg-purple-500',
+        'gastronomie': 'bg-green-500', 'activites': 'bg-orange-500'
     }
-    
     categories = {
-        'plages': 'Plages paradisiaques',
-        'culture': 'Patrimoine culturel',
-        'gastronomie': 'Gastronomie authentique',
-        'activites': 'Activités & Découverte'
+        'plages': 'Plages paradisiaques', 'culture': 'Patrimoine culturel',
+        'gastronomie': 'Gastronomie authentique', 'activites': 'Activités & Découverte'
     }
     
     for category, attractions in real_data['attractions'].items():
@@ -1046,176 +1147,49 @@ def generate_travel_page_real_data(data, real_data, savings):
                 </div>
             </div>"""
 
-    # Template HTML avec les VRAIES données - VERSION SÉCURISÉE
     html_template = f"""<!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Voyages Privilèges - {data['hotel_name']} {data['destination']} - VERSION SÉCURISÉE</title>
+    <title>Voyages Privilèges - {data['hotel_name']} {data['destination']}</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body {{
-            font-family: 'Poppins', sans-serif;
-            line-height: 1.6;
-            background-color: #f4f4f5;
-        }}
-        .instagram-card {{
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
-            overflow: hidden;
-            margin-bottom: 20px;
-        }}
-        .story-card {{
-            background: linear-gradient(135deg, #3B82F6 0%, #60A5FA 100%);
-            border-radius: 25px;
-            padding: 25px;
-            margin-bottom: 20px;
-            color: white;
-            text-align: center;
-            box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3);
-        }}
-        .video-container {{
-            position: relative;
-            padding-bottom: 56.25%;
-            height: 0;
-            overflow: hidden;
-            border-radius: 15px;
-        }}
-        .video-container iframe {{
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-        }}
-        .image-grid {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 15px;
-        }}
-        .image-item {{
-            border-radius: 15px;
-            overflow: hidden;
-            position: relative;
-        }}
-        .image-item img {{
-            width: 100%;
-            height: 200px;
-            object-fit: cover;
-            transition: transform 0.3s ease;
-        }}
-        .image-item:hover img {{
-            transform: scale(1.1);
-        }}
-        .cta-button {{
-            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
-            color: white;
-            border: none;
-            padding: 15px 30px;
-            border-radius: 25px;
-            font-weight: 600;
-            text-decoration: none;
-            display: inline-block;
-            transition: all 0.3s ease;
-            box-shadow: 0 5px 15px rgba(255, 107, 107, 0.3);
-        }}
-        .cta-button:hover {{
-            transform: translateY(-3px);
-            box-shadow: 0 10px 25px rgba(255, 107, 107, 0.5);
-            color: white;
-        }}
-        .feature-icon {{
-            width: 45px;
-            height: 45px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 18px;
-            flex-shrink: 0;
-        }}
-        .section-title {{
-            font-family: 'Playfair Display', serif;
-            font-weight: 700;
-            text-align: center;
-            margin-bottom: 30px;
-            color: #333;
-        }}
-        .instagram-header {{
-            background: white;
-            color: #333;
-            padding: 20px;
-            border-radius: 20px;
-            margin-bottom: 20px;
-            text-align: center;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
-        }}
-        .mobile-optimized {{
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 10px;
-        }}
-        .comparison-card {{
-            background: white;
-            border-radius: 20px;
-            padding: 20px;
-            margin: 10px 0;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
-        }}
-        .booking-card {{
-            border: 2px solid #ffdddd;
-            background: #fffafa;
-        }}
-        .privilege-card {{
-            background: linear-gradient(135deg, #00b894, #00a085);
-            color: white;
-        }}
-        .economy-highlight {{
-            background: linear-gradient(45deg, #ffd700, #ffb347);
-            color: #333;
-            padding: 15px;
-            border-radius: 15px;
-            text-align: center;
-            margin-top: 20px;
-            font-weight: bold;
-            font-size: 1.1em;
-        }}
-        .api-badge {{
-            background: #e8f5e8;
-            color: #2d5a2d;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 10px;
-            font-weight: bold;
-        }}
-        .security-badge {{
-            background: #e8f8ff;
-            color: #1e40af;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 10px;
-            font-weight: bold;
-        }}
+        body {{ font-family: 'Poppins', sans-serif; line-height: 1.6; background-color: #f4f4f5; }}
+        .instagram-card {{ background: white; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); overflow: hidden; margin-bottom: 20px; }}
+        .story-card {{ background: linear-gradient(135deg, #3B82F6 0%, #60A5FA 100%); border-radius: 25px; padding: 25px; margin-bottom: 20px; color: white; text-align: center; box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3); }}
+        .video-container {{ position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 15px; }}
+        .video-container iframe {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; }}
+        .image-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; }}
+        .image-item {{ border-radius: 15px; overflow: hidden; position: relative; }}
+        .image-item img {{ width: 100%; height: 200px; object-fit: cover; transition: transform 0.3s ease; }}
+        .image-item:hover img {{ transform: scale(1.1); }}
+        .cta-button {{ background: linear-gradient(45deg, #ff6b6b, #ee5a24); color: white; border: none; padding: 15px 30px; border-radius: 25px; font-weight: 600; text-decoration: none; display: inline-block; transition: all 0.3s ease; box-shadow: 0 5px 15px rgba(255, 107, 107, 0.3); }}
+        .cta-button:hover {{ transform: translateY(-3px); box-shadow: 0 10px 25px rgba(255, 107, 107, 0.5); color: white; }}
+        .feature-icon {{ width: 45px; height: 45px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 18px; flex-shrink: 0; }}
+        .section-title {{ font-family: 'Playfair Display', serif; font-weight: 700; text-align: center; margin-bottom: 30px; color: #333; }}
+        .instagram-header {{ background: white; color: #333; padding: 20px; border-radius: 20px; margin-bottom: 20px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.08); }}
+        .mobile-optimized {{ max-width: 600px; margin: 0 auto; padding: 10px; }}
+        .comparison-card {{ background: white; border-radius: 20px; padding: 20px; margin: 10px 0; box-shadow: 0 5px 20px rgba(0,0,0,0.05); }}
+        .booking-card {{ border: 2px solid #ffdddd; background: #fffafa; }}
+        .privilege-card {{ background: linear-gradient(135deg, #00b894, #00a085); color: white; }}
+        .economy-highlight {{ background: linear-gradient(45deg, #ffd700, #ffb347); color: #333; padding: 15px; border-radius: 15px; text-align: center; margin-top: 20px; font-weight: bold; font-size: 1.1em; }}
+        .api-badge {{ background: #e8f5e8; color: #2d5a2d; padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: bold; }}
+        .security-badge {{ background: #e8f8ff; color: #1e40af; padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: bold; }}
     </style>
 </head>
 <body>
     <div class="mobile-optimized">
-        <!-- Instagram-style Header -->
         <div class="instagram-header">
             <img src="https://static.wixstatic.com/media/5ca515_449af35c8bea462986caf4fd28e02398~mv2.png" alt="Logo Voyages Privilèges" class="mx-auto h-20">
             <p class="api-badge mt-2">APIs 100% sécurisées</p>
             <p class="security-badge mt-1">🔒 Version protégée</p>
         </div>
-
-        <!-- Hero Story Card -->
         <div class="story-card">
             <div class="mb-6">
-                <img src="{real_data['photos'][0] if real_data['photos'] else 'https://via.placeholder.com/800x400?text=Photos+en+chargement+securise'}" alt="{data['hotel_name']}" class="w-full h-64 object-cover rounded-lg mb-4 shadow-lg">
+                <img src="{real_data['photos'][0] if real_data['photos'] else 'https://via.placeholder.com/800x400?text=Image+non+disponible'}" alt="{data['hotel_name']}" class="w-full h-64 object-cover rounded-lg mb-4 shadow-lg">
             </div>
             <h2 class="text-xl font-bold mb-2">{data['hotel_name']} {stars}</h2>
             <p class="text-base mb-2">📍 {data['destination']}</p>
@@ -1224,8 +1198,6 @@ def generate_travel_page_real_data(data, real_data, savings):
             <p class="text-sm">pour 2 personnes</p>
             {f'<p class="text-xs mt-2">Note Google: {real_data["hotel_rating"]}/5 ({real_data["total_reviews"]} avis)</p>' if real_data['hotel_rating'] > 0 else ''}
         </div>
-
-        <!-- Ce qui est inclus -->
         <div class="instagram-card">
             <div class="p-6">
                 <h3 class="section-title text-lg"><i class="fas fa-check-circle text-green-500 mr-2"></i>Inclus dans votre séjour</h3>
@@ -1239,8 +1211,6 @@ def generate_travel_page_real_data(data, real_data, savings):
                 </div>
             </div>
         </div>
-
-        <!-- Comparaison de prix -->
         <div class="instagram-card">
             <div class="p-6">
                 <h3 class="section-title text-lg">💰 Pourquoi nous choisir ?</h3>
@@ -1268,51 +1238,31 @@ def generate_travel_page_real_data(data, real_data, savings):
                 </div>
             </div>
         </div>
-
-        <!-- Galerie d'images SÉCURISÉES -->
         <div class="instagram-card">
             <div class="p-6">
                 <h3 class="section-title text-lg">📸 Photos réelles sécurisées <span class="api-badge">Google Places API</span></h3>
-                <div class="image-grid">
-                    {image_gallery}
-                </div>
+                <div class="image-grid">{image_gallery}</div>
             </div>
         </div>
-
-        <!-- Vidéos SÉCURISÉES -->
         {f'<div class="instagram-card"><div class="p-6"><h3 class="section-title text-lg">🎥 Vidéos protégées <span class="api-badge">YouTube API</span></h3><div class="space-y-6">{video_section}</div></div></div>' if video_section else ''}
-
-        <!-- Avis clients SÉCURISÉS -->
         <div class="instagram-card">
             <div class="p-6">
                 <h3 class="section-title text-lg">⭐ Avis clients vérifiés <span class="api-badge">Google Places API</span></h3>
-                <div class="space-y-4">
-                    {reviews_section}
-                </div>
+                <div class="space-y-4">{reviews_section}</div>
             </div>
         </div>
-
-        <!-- Découvrir la destination SÉCURISÉE -->
         <div class="instagram-card">
             <div class="p-6">
                 <h3 class="section-title text-lg">🌍 Découvrir {data['destination']} <span class="api-badge">Gemini API</span></h3>
-                <div class="space-y-6">
-                    {destination_section}
-                </div>
+                <div class="space-y-6">{destination_section}</div>
             </div>
         </div>
-
-        <!-- CTA Final -->
         <div class="instagram-card">
             <div class="p-6 text-center">
                 <h3 class="section-title text-lg">✈️ Prêt pour l'aventure ?</h3>
                 <p class="text-gray-600 mb-6">Réservez dès maintenant votre séjour de rêve à {data['destination']}</p>
-                <a href="mailto:contact@voyagesprivileges.com" class="cta-button">
-                    📞 Réserver maintenant
-                </a>
-                <p class="text-xs text-gray-500 mt-4">
-                    📧 contact@voyagesprivileges.com | 📞 +33 X XX XX XX XX
-                </p>
+                <a href="mailto:contact@voyagesprivileges.com" class="cta-button">📞 Réserver maintenant</a>
+                <p class="text-xs text-gray-500 mt-4">📧 contact@voyagesprivileges.com | 📞 +33 X XX XX XX XX</p>
             </div>
         </div>
     </div>
