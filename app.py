@@ -598,6 +598,7 @@ INTERFACE_HTML = """
         }
         .form-group {
             margin-bottom: 25px;
+            width: 100%;
         }
         label {
             display: block;
@@ -764,6 +765,22 @@ INTERFACE_HTML = """
             display: inline-block;
             float: left;
         }
+        
+        /* AJOUTÉ : Media Queries pour le design responsive */
+        @media (max-width: 768px) {
+            .form-row {
+                /* Fait passer les lignes en colonnes sur mobile */
+                flex-direction: column;
+                gap: 0; /* On retire l'écart horizontal */
+            }
+            .form-container {
+                /* Réduit les marges intérieures sur les petits écrans */
+                padding: 20px;
+            }
+            .header {
+                padding: 15px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -854,6 +871,14 @@ INTERFACE_HTML = """
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             
+            // --- CORRIGÉ : Fonction de formatage de date fiable ---
+            function formatDate(d) {
+                const year = d.getFullYear();
+                const month = ('0' + (d.getMonth() + 1)).slice(-2); // +1 car les mois sont 0-indexed
+                const day = ('0' + d.getDate()).slice(-2);
+                return `${year}-${month}-${day}`;
+            }
+
             const startDateInput = document.getElementById('date_start');
             const endDateInput = document.getElementById('date_end');
             const picker = new Litepicker({
@@ -863,8 +888,9 @@ INTERFACE_HTML = """
                 format: 'DD MMMM YYYY',
                 setup: (picker) => {
                     picker.on('selected', (date1, date2) => {
-                        startDateInput.value = date1.toJSDate().toISOString().split('T')[0];
-                        endDateInput.value = date2.toJSDate().toISOString().split('T')[0];
+                        // Utilise la nouvelle fonction de formatage pour éviter les bugs de fuseau horaire
+                        startDateInput.value = formatDate(date1.toJSDate());
+                        endDateInput.value = formatDate(date2.toJSDate());
                     });
                 },
             });
