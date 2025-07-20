@@ -15,6 +15,7 @@ from datetime import datetime
 import os
 import base64
 from urllib.parse import quote_plus
+import re # ✅ AJOUT: Importation pour les expressions régulières
 
 app = Flask(__name__)
 
@@ -116,7 +117,6 @@ class RealAPIHotelGatherer:
             print(f"❌ Erreur API YouTube: {e}")
             return []
     
-    # ✅ MODIFIÉ: La fonction utilise maintenant l'API Google Places pour une image réelle
     def get_attraction_image(self, attraction_name, destination):
         if not self.google_api_key: return None
         print(f"ℹ️ Recherche d'une image réelle pour : {attraction_name} à {destination}")
@@ -188,13 +188,12 @@ class RealAPIHotelGatherer:
             'cultural_attraction_image': cultural_attraction_image
         }
 
-# ... (Le reste du code pour LOGIN_HTML, INTERFACE_HTML, les routes Flask, etc. reste identique) ...
-# ... (Collez le reste de votre code original ici, de LOGIN_HTML à la fin) ...
 
-# Page de connexion HTML
+# ... (LOGIN_HTML reste identique) ...
 LOGIN_HTML = """
 <!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>🔐 Connexion</title><style>body{font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin:0; padding:20px; min-height:100vh; display:flex; align-items:center; justify-content:center;}.login-container{background:white; border-radius:20px; box-shadow:0 20px 40px rgba(0,0,0,0.1); padding:40px; width:400px; text-align:center;}.login-header h1{font-size: 2em;}.form-group{margin-bottom:20px; text-align:left;}label{display:block; margin-bottom:8px; font-weight:600;}input{width:100%; padding:12px; border:2px solid #e1e5e9; border-radius:8px; font-size:16px; box-sizing:border-box;}input:focus{outline:none; border-color:#3B82F6;}.login-btn{background: linear-gradient(45deg, #3B82F6, #60A5FA); color:white; border:none; padding:15px 40px; border-radius:25px; font-size:18px; font-weight:600; cursor:pointer; width:100%;}.error{color:#dc3545; margin-top:15px; font-weight:600;}.logo{max-width:200px; margin-bottom:20px;}</style></head><body><div class="login-container"><div class="login-header"><img src="https://static.wixstatic.com/media/5ca515_449af35c8bea462986caf4fd28e02398~mv2.png" alt="Logo" class="logo"><h1>🔐 Connexion</h1></div><form method="POST"><div class="form-group"><label for="username">👤 Nom d'utilisateur</label><input type="text" id="username" name="username" required></div><div class="form-group"><label for="password">🔑 Mot de passe</label><input type="password" id="password" name="password" required></div><button type="submit" class="login-btn">🚀 Se connecter</button>{% if error %}<div class="error">{{ error }}</div>{% endif %}</form></div></body></html>
 """
+
 
 INTERFACE_HTML = """
 <!DOCTYPE html>
@@ -228,9 +227,13 @@ INTERFACE_HTML = """
         .success {color: #28a745; font-size: 18px; font-weight: 600; text-align: center;}
         .error {color: #dc3545; font-size: 18px; font-weight: 600;}
         .button-container {margin-top: 20px; display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;}
-        .download-btn, .view-btn {color: white; border: none; padding: 12px 30px; border-radius: 8px; font-size: 16px; text-decoration: none;}
+        .download-btn, .view-btn, .edit-btn {color: white; border: none; padding: 12px 30px; border-radius: 8px; font-size: 16px; text-decoration: none; cursor: pointer;}
         .download-btn {background: #28a745;}
         .view-btn {background: #3B82F6;}
+        .edit-btn {background: #ffc107; color: #333;}
+        .video-edit-form { margin-top: 20px; display: flex; gap: 10px; align-items: center; padding: 15px; background-color: #e9ecef; border-radius: 10px;}
+        .video-edit-form input { flex-grow: 1; }
+        .video-edit-form button { padding: 12px 20px; color: white; border-radius: 8px; border: none; cursor: pointer; font-size: 16px; white-space: nowrap; }
         .stats {display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-top: 20px;}
         .stat-item {background: white; padding: 15px; border-radius: 8px; text-align: center; box-shadow: 0 2px 10px rgba(0,0,0,0.1);}
         .stat-number {font-size: 24px; font-weight: bold; color: #3B82F6;}
@@ -305,8 +308,14 @@ INTERFACE_HTML = """
     
     <script src="https://cdn.jsdelivr.net/npm/litepicker/dist/litepicker.js"></script>
     <script>
+        function getYouTubeId(url) {
+            const regExp = /^.*(http:\/\/googleusercontent.com\/youtube\.com\/watch\?v=|http:\/\/googleusercontent.com\/youtube\.com\/embed\/|http:\/\/googleusercontent.com\/youtube\.com\/v\/|http:\/\/googleusercontent.com\/youtube\.com\/shorts\/|youtu\.be\/|\/v\/|\/embed\/|watch\?v=|\&v=)([^#\&\?]{11})/;
+            const match = url.match(regExp);
+            return (match && match[2].length === 11) ? match[2] : null;
+        }
+
         function initializeApp() {
-            // --- INITIALISATIONS DES LIBRAIRIES EXTERNES ---
+            // ... (Initialisation Litepicker & Google Autocomplete)
             new Litepicker({
                 element: document.getElementById('date_range'),
                 singleMode: false, lang: 'fr-FR', format: 'DD MMMM YYYY',
@@ -318,26 +327,20 @@ INTERFACE_HTML = """
                     });
                 },
             });
-
-            // --- AUTOCOMPLÉTIONS GOOGLE ---
             const hotelInput = document.getElementById('hotel_name');
             const destinationInput = document.getElementById('destination');
             const starsSelect = document.getElementById('stars');
             const departureInput = document.getElementById('departure_city');
             const arrivalInput = document.getElementById('arrival_airport');
-
             new google.maps.places.Autocomplete(departureInput, { types: ['airport'] });
             new google.maps.places.Autocomplete(arrivalInput, { types: ['airport'] });
-            
             const destinationAutocomplete = new google.maps.places.Autocomplete(destinationInput, { types: ['(regions)'], fields: ['geometry', 'name'] });
             const hotelAutocomplete = new google.maps.places.Autocomplete(hotelInput, { types: ['lodging'] });
             hotelAutocomplete.setFields(['name', 'rating', 'address_components']);
-
             destinationAutocomplete.addListener('place_changed', () => {
                 const place = destinationAutocomplete.getPlace();
                 if (place.geometry && place.geometry.viewport) hotelAutocomplete.setBounds(place.geometry.viewport);
             });
-
             hotelAutocomplete.addListener('place_changed', () => {
                 const hotelPlace = hotelAutocomplete.getPlace();
                 if (hotelPlace.address_components) {
@@ -355,8 +358,6 @@ INTERFACE_HTML = """
                     else starsSelect.value = '3';
                 }
             });
-
-            // --- EVENT LISTENERS POUR LES BOUTONS ---
             document.getElementById('searchBookingBtn').addEventListener('click', () => {
                 const hotelName = hotelInput.value;
                 const checkinDate = document.getElementById('date_start').value;
@@ -365,16 +366,18 @@ INTERFACE_HTML = """
                 const bookingUrl = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(hotelName)}&checkin=${checkinDate}&checkout=${checkoutDate}&group_adults=2&no_rooms=1`;
                 window.open(bookingUrl, '_blank');
             });
-
+            
             document.getElementById('searchFlightsBtn').addEventListener('click', () => {
                 const departureText = departureInput.value;
                 const arrivalText = arrivalInput.value;
                 const checkinDate = document.getElementById('date_start').value;
                 const checkoutDate = document.getElementById('date_end').value;
-                const departure = departureText.split('(')[1]?.split(')')[0] || departureText;
-                const arrival = arrivalText.split('(')[1]?.split(')')[0] || arrivalText;
-                if (!departure || !arrival || !checkinDate || !checkoutDate) return alert("Veuillez sélectionner les aéroports et les dates.");
-                const flightsUrl = `https://www.google.com/flights?hl=fr#flt=${departure}.${arrival}.${checkinDate}*${arrival}.${departure}.${checkoutDate}`;
+                
+                if (!departureText || !arrivalText || !checkinDate || !checkoutDate) {
+                    return alert("Veuillez sélectionner les aéroports de départ, d'arrivée et les dates.");
+                }
+                
+                const flightsUrl = `https://www.google.com/flights?hl=fr&q=vols+de+${encodeURIComponent(departureText)}+à+${encodeURIComponent(arrivalText)}+le+${checkinDate}+retour+le+${checkoutDate}`;
                 window.open(flightsUrl, '_blank');
             });
             
@@ -392,9 +395,11 @@ INTERFACE_HTML = """
                 .then(response => response.json())
                 .then(data => {
                     document.getElementById('loading').style.display = 'none';
-                    document.getElementById('result').style.display = 'block';
+                    const resultDiv = document.getElementById('result');
+                    resultDiv.style.display = 'block';
+
                     if (data.success) {
-                        document.getElementById('result').innerHTML = `
+                        resultDiv.innerHTML = `
                             <div class="success">✅ Page générée !</div>
                             <div class="stats">
                                 <div class="stat-item"><div class="stat-number">${data.real_photos_count}</div><div class="stat-label">Photos</div></div>
@@ -406,9 +411,38 @@ INTERFACE_HTML = """
                             <div class="button-container">
                                 <a href="/download/${data.filename}" class="download-btn">📥 Télécharger</a>
                                 <a href="/view/${data.filename}" class="view-btn" target="_blank">👁️ Ouvrir</a>
-                            </div>`;
+                                <a href="#" id="editVideoBtn" class="edit-btn">✏️ Modifier Vidéo</a>
+                            </div>
+                            <div id="videoEditContainer" class="video-edit-form" style="display:none;">
+                                <input type="text" id="newVideoUrl" placeholder="Coller la nouvelle URL YouTube ici...">
+                                <button id="submitVideoChange" style="background-color: #28a745;">Valider</button>
+                                <button id="deleteVideoBtn" style="background-color: #dc3545;">Pas de Vidéo</button>
+                            </div>
+                            <div id="editConfirmation" style="font-weight: bold; text-align: center; margin-top: 15px;"></div>`;
+
+                        document.getElementById('editVideoBtn').addEventListener('click', (e) => {
+                            e.preventDefault();
+                            document.getElementById('videoEditContainer').style.display = 'flex';
+                            e.target.style.display = 'none';
+                        });
+
+                        document.getElementById('submitVideoChange').addEventListener('click', () => {
+                            const newUrl = document.getElementById('newVideoUrl').value;
+                            const videoId = getYouTubeId(newUrl);
+                            if (!videoId) {
+                                alert("URL YouTube invalide. Assurez-vous d'utiliser une URL complète (ex: https://www.youtube.com/watch?v=...).");
+                                return;
+                            }
+                            updateVideo({ filename: data.filename, video_id: videoId });
+                        });
+                        
+                        document.getElementById('deleteVideoBtn').addEventListener('click', () => {
+                            if (!confirm("Êtes-vous sûr de vouloir supprimer la section vidéo ?")) return;
+                            updateVideo({ filename: data.filename, video_id: 'DELETE' });
+                        });
+
                     } else {
-                        document.getElementById('result').innerHTML = `<div class="error">❌ Erreur: ${data.error}</div>`;
+                        resultDiv.innerHTML = `<div class="error">❌ Erreur: ${data.error}</div>`;
                     }
                 })
                 .catch(error => {
@@ -417,6 +451,30 @@ INTERFACE_HTML = """
                     document.getElementById('result').innerHTML = `<div class="error">❌ Erreur de connexion: ${error.message}</div>`;
                 });
             });
+
+            function updateVideo(payload) {
+                const confirmDiv = document.getElementById('editConfirmation');
+                confirmDiv.textContent = "Mise à jour...";
+                confirmDiv.style.color = '#333';
+
+                fetch('/update_video', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                })
+                .then(res => res.json())
+                .then(updateStatus => {
+                    if (updateStatus.success) {
+                        confirmDiv.textContent = '✅ Opération réussie ! La page a été mise à jour.';
+                        confirmDiv.style.color = 'green';
+                        document.getElementById('videoEditContainer').style.display = 'none';
+                    } else {
+                        confirmDiv.textContent = `❌ Erreur: ${updateStatus.error}`;
+                        confirmDiv.style.color = 'red';
+                        document.getElementById('editVideoBtn').style.display = 'inline-block';
+                    }
+                });
+            }
         }
     </script>
     <script async src="https://maps.googleapis.com/maps/api/js?key={{ google_api_key }}&libraries=places&callback=initializeApp"></script>
@@ -476,6 +534,56 @@ def generate():
         print(f"❌ Erreur génération: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
+@app.route('/update_video', methods=['POST'])
+def update_video():
+    if not check_auth():
+        return jsonify({'success': False, 'error': 'Non autorisé'})
+
+    try:
+        data = request.get_json()
+        filename = data.get('filename')
+        new_video_id = data.get('video_id')
+
+        if not all([filename, new_video_id]):
+            return jsonify({'success': False, 'error': 'Données manquantes.'})
+
+        if '..' in filename or filename.startswith('/'):
+            return jsonify({'success': False, 'error': 'Nom de fichier invalide.'})
+
+        filepath = f"./{filename}"
+        if not os.path.exists(filepath):
+            return jsonify({'success': False, 'error': 'Fichier non trouvé.'})
+
+        with open(filepath, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        wrapper_pattern = re.compile(r'<div id="video-section-wrapper".*?</div>', re.DOTALL)
+        
+        if new_video_id == 'DELETE':
+            updated_content = wrapper_pattern.sub('', content)
+        else:
+            # ✅ CORRECTION: Ajout du </div> manquant
+            new_video_block_content = f'<div><h4>Visite de l\'hôtel</h4><div class="video-container"><iframe src="https://www.youtube.com/embed/{new_video_id}" title="Vidéo" frameborder="0" allowfullscreen></iframe></div></div>'
+            new_video_block = f'<div id="video-section-wrapper" class="instagram-card p-6"><h3 class="section-title text-xl mb-4">Vidéo</h3>{new_video_block_content}</div>'
+            
+            if wrapper_pattern.search(content):
+                updated_content = wrapper_pattern.sub(new_video_block, content)
+            else:
+                gallery_pattern = re.compile(r'(<div class="instagram-card p-6">\s*<h3 class="section-title text-xl mb-4">Galerie de photos</h3>.*?</div>)', re.DOTALL)
+                if gallery_pattern.search(content):
+                    updated_content = gallery_pattern.sub(rf'\g<1>\n{new_video_block}', content)
+                else:
+                    return jsonify({'success': False, 'error': 'Point d\'insertion de la vidéo introuvable.'})
+
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(updated_content)
+
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"❌ Erreur mise à jour vidéo: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
 @app.route('/download/<filename>')
 def download_file(filename):
     if not check_auth(): return redirect(url_for('login'))
@@ -527,8 +635,14 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
     """
 
     image_gallery = "".join([f'<div class="image-item"><img src="{url}" alt="Photo de {data["hotel_name"]}"></div>\n' for url in real_data['photos']]) if real_data['photos'] else '<p>Aucune photo disponible.</p>'
-    video_section = "".join([f'<div><h4>Visite de l\'hôtel</h4><div class="video-container"><iframe src="https://www.youtube.com/embed/{v["id"]}" title="{v["title"]}" frameborder="0" allowfullscreen></iframe></div></div>' for v in real_data['videos'][:1]])
-    reviews_section = "".join([f'<div class="bg-gray-50 p-4 rounded-lg"><div><span>{r["rating"]}</span><span>{r["author"]}</span><span>{r.get("date", "")}</span></div><p>"{r["text"]}"</p></div>' for r in real_data['reviews']])
+    
+    video_html_block = ""
+    if real_data['videos']:
+        # ✅ CORRECTION: Ajout du </div> manquant
+        video_section_content = "".join([f'<div><h4>Visite de l\'hôtel</h4><div class="video-container"><iframe src="https://www.youtube.com/embed/{v["id"]}" title="{v["title"]}" frameborder="0" allowfullscreen></iframe></div></div>' for v in real_data['videos'][:1]])
+        video_html_block = f'<div id="video-section-wrapper" class="instagram-card p-6"><h3 class="section-title text-xl mb-4">Vidéo</h3>{video_section_content}</div>'
+
+    reviews_section = "".join([f'<div class="bg-gray-50 p-4 rounded-lg"><div><span class="font-semibold">{r["author"]}</span> <span class="text-yellow-500">{r["rating"]}</span> <span class="text-gray-500 text-sm float-right">{r.get("date", "")}</span></div><p class="mt-2 text-gray-700">"{r["text"]}"</p></div>' for r in real_data['reviews']])
     
     destination_section = ""
     if real_data.get('cultural_attraction_image'):
@@ -595,8 +709,9 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
         body {{ font-family: 'Poppins', sans-serif; }} .section-title {{ font-family: 'Playfair Display', serif; }}
-        .instagram-card {{ background: white; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); overflow: hidden; margin-bottom: 20px; }}
-        .story-card {{ background: linear-gradient(135deg, #3B82F6 0%, #60A5FA 100%); border-radius: 25px; padding: 25px; margin-bottom: 20px; color: white; text-align: center; box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3); }}
+        .instagram-card {{ background: white; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); overflow: hidden; }}
+        .story-card, .instagram-card + .instagram-card {{ margin-top: 20px; }}
+        .story-card {{ background: linear-gradient(135deg, #3B82F6 0%, #60A5FA 100%); border-radius: 25px; padding: 25px; color: white; text-align: center; box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3); margin-top: 0; }}
         .video-container {{ position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 15px; }}
         .video-container iframe {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; }}
         .image-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; }}
@@ -642,7 +757,7 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
             <h3 class="section-title text-xl mb-4">Galerie de photos</h3>
             <div class="image-grid">{image_gallery}</div>
         </div>
-        {f'<div class="instagram-card p-6"><h3 class="section-title text-xl mb-4">Vidéo</h3>{video_section}</div>' if video_section else ''}
+        {video_html_block}
         <div class="instagram-card p-6">
             <h3 class="section-title text-xl mb-4">Avis des clients</h3>
             <div class="space-y-4">{reviews_section}</div>
