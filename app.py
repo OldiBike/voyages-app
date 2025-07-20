@@ -246,11 +246,13 @@ INTERFACE_HTML = r"""
 </head>
 <body>
     <div class="container">
+        <!-- ... header ... -->
         <div class="header">
             <img src="https://static.wixstatic.com/media/5ca515_449af35c8bea462986caf4fd28e02398~mv2.png" alt="Logo" class="header-logo">
             <p>Générateur de présentation</p>
             <div class="user-info"><span>👤 Connecté : {{ username }}</span><a href="/logout">🚪 Déconnexion</a></div>
         </div>
+        <!-- ... form ... -->
         <div class="form-container">
             <form id="voyageForm">
                 <h3 class="section-divider"><span>Détails du Séjour</span></h3>
@@ -557,13 +559,14 @@ def update_video():
         with open(filepath, 'r', encoding='utf-8') as f:
             content = f.read()
         
-        wrapper_pattern = re.compile(r'<div id="video-section-wrapper".*?</div>', re.DOTALL)
+        # ✅ CORRECTION: Utilisation d'un commentaire HTML pour un remplacement 100% fiable
+        wrapper_pattern = re.compile(r'<div id="video-section-wrapper".*?<!-- /video-section-wrapper -->', re.DOTALL)
         
         if new_video_id == 'DELETE':
             updated_content = wrapper_pattern.sub('', content)
         else:
             new_video_block_content = f'<div><h4 class="font-semibold mb-2">Visite de l\'hôtel</h4><div class="video-container aspect-w-16 aspect-h-9"><iframe src="https://www.youtube.com/embed/{new_video_id}" title="Vidéo" frameborder="0" allowfullscreen class="w-full h-full rounded-lg"></iframe></div></div>'
-            new_video_block = f'<div id="video-section-wrapper" class="instagram-card p-6"><h3 class="section-title text-xl mb-4">Vidéo</h3>{new_video_block_content}</div>'
+            new_video_block = f'<div id="video-section-wrapper" class="instagram-card p-6"><h3 class="section-title text-xl mb-4">Vidéo</h3>{new_video_block_content}</div><!-- /video-section-wrapper -->'
             
             if wrapper_pattern.search(content):
                 # Si le bloc existe, on le remplace
@@ -640,7 +643,8 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
     video_html_block = ""
     if real_data['videos']:
         video_section_content = "".join([f'<div><h4 class="font-semibold mb-2">Visite de l\'hôtel</h4><div class="video-container aspect-w-16 aspect-h-9"><iframe src="https://www.youtube.com/embed/{v["id"]}" title="{v["title"]}" frameborder="0" allowfullscreen class="w-full h-full rounded-lg"></iframe></div></div>' for v in real_data['videos'][:1]])
-        video_html_block = f'<div id="video-section-wrapper" class="instagram-card p-6"><h3 class="section-title text-xl mb-4">Vidéo</h3>{video_section_content}</div>'
+        # ✅ CORRECTION: Ajout d'un commentaire HTML pour une suppression fiable
+        video_html_block = f'<div id="video-section-wrapper" class="instagram-card p-6"><h3 class="section-title text-xl mb-4">Vidéo</h3>{video_section_content}</div><!-- /video-section-wrapper -->'
 
     reviews_section = "".join([f'<div class="bg-gray-50 p-4 rounded-lg"><div><span class="font-semibold">{r["author"]}</span> <span class="text-yellow-500">{r["rating"]}</span> <span class="text-gray-500 text-sm float-right">{r.get("date", "")}</span></div><p class="mt-2 text-gray-700">"{r["text"]}"</p></div>' for r in real_data['reviews']])
     
@@ -700,7 +704,6 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
         </div>
         """
     
-    # ✅ AJOUT: Blocs de fin de page avec les informations mises à jour
     footer_html = f"""
         <div class="instagram-card p-6 bg-blue-500 text-white text-center">
             <h3 class="text-2xl font-bold mb-2">🌟 Réservez votre évasion !</h3>
@@ -751,6 +754,7 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
 </head>
 <body>
     <div style="max-width: 600px; margin: auto; padding: 10px;">
+        <!-- ✅ AJOUT: Logo en début de page -->
         <div style="text-align: center; padding-top: 20px; padding-bottom: 10px;">
             <img src="https://static.wixstatic.com/media/5ca515_449af35c8bea462986caf4fd28e02398~mv2.png" alt="Logo Voyages Privilèges" style="max-height: 50px; margin: auto;">
         </div>
@@ -800,6 +804,7 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
              {destination_section}
         </div>
         
+        <!-- ✅ AJOUT: Blocs de fin de page -->
         {footer_html}
     </div>
 </body>
