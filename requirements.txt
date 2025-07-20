@@ -6,3 +6,4 @@ google-generativeai
 python-dotenv
 unidecode
 pydrive2
+python-slugify
