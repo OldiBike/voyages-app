@@ -195,7 +195,7 @@ LOGIN_HTML = """
 """
 
 
-INTERFACE_HTML = """
+INTERFACE_HTML = r"""
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -562,13 +562,14 @@ def update_video():
         if new_video_id == 'DELETE':
             updated_content = wrapper_pattern.sub('', content)
         else:
-            # ✅ CORRECTION: Ajout du </div> manquant
-            new_video_block_content = f'<div><h4>Visite de l\'hôtel</h4><div class="video-container"><iframe src="https://www.youtube.com/embed/{new_video_id}" title="Vidéo" frameborder="0" allowfullscreen></iframe></div></div>'
+            new_video_block_content = f'<div><h4 class="font-semibold mb-2">Visite de l\'hôtel</h4><div class="video-container aspect-w-16 aspect-h-9"><iframe src="https://www.youtube.com/embed/{new_video_id}" title="Vidéo" frameborder="0" allowfullscreen class="w-full h-full rounded-lg"></iframe></div></div>'
             new_video_block = f'<div id="video-section-wrapper" class="instagram-card p-6"><h3 class="section-title text-xl mb-4">Vidéo</h3>{new_video_block_content}</div>'
             
             if wrapper_pattern.search(content):
+                # Si le bloc existe, on le remplace
                 updated_content = wrapper_pattern.sub(new_video_block, content)
             else:
+                # Sinon, on l'insère après la galerie photo
                 gallery_pattern = re.compile(r'(<div class="instagram-card p-6">\s*<h3 class="section-title text-xl mb-4">Galerie de photos</h3>.*?</div>)', re.DOTALL)
                 if gallery_pattern.search(content):
                     updated_content = gallery_pattern.sub(rf'\g<1>\n{new_video_block}', content)
@@ -638,8 +639,7 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
     
     video_html_block = ""
     if real_data['videos']:
-        # ✅ CORRECTION: Ajout du </div> manquant
-        video_section_content = "".join([f'<div><h4>Visite de l\'hôtel</h4><div class="video-container"><iframe src="https://www.youtube.com/embed/{v["id"]}" title="{v["title"]}" frameborder="0" allowfullscreen></iframe></div></div>' for v in real_data['videos'][:1]])
+        video_section_content = "".join([f'<div><h4 class="font-semibold mb-2">Visite de l\'hôtel</h4><div class="video-container aspect-w-16 aspect-h-9"><iframe src="https://www.youtube.com/embed/{v["id"]}" title="{v["title"]}" frameborder="0" allowfullscreen class="w-full h-full rounded-lg"></iframe></div></div>' for v in real_data['videos'][:1]])
         video_html_block = f'<div id="video-section-wrapper" class="instagram-card p-6"><h3 class="section-title text-xl mb-4">Vidéo</h3>{video_section_content}</div>'
 
     reviews_section = "".join([f'<div class="bg-gray-50 p-4 rounded-lg"><div><span class="font-semibold">{r["author"]}</span> <span class="text-yellow-500">{r["rating"]}</span> <span class="text-gray-500 text-sm float-right">{r.get("date", "")}</span></div><p class="mt-2 text-gray-700">"{r["text"]}"</p></div>' for r in real_data['reviews']])
@@ -700,6 +700,36 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
         </div>
         """
     
+    # ✅ AJOUT: Blocs de fin de page avec les informations mises à jour
+    footer_html = f"""
+        <div class="instagram-card p-6 bg-blue-500 text-white text-center">
+            <h3 class="text-2xl font-bold mb-2">🌟 Réservez votre évasion !</h3>
+            <p>Les places sont très limitées pour cette offre exclusive. Pour garantir votre place :</p>
+            <div class="mt-4 flex flex-col sm:flex-row justify-center gap-4">
+                <a href="tel:+32488433344" class="block w-full sm:w-auto bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-full">
+                    📞 Appeler maintenant
+                </a>
+                <a href="mailto:voyages-privileges@oldibike.be" class="block w-full sm:w-auto bg-white hover:bg-gray-100 text-blue-500 font-bold py-3 px-6 rounded-full">
+                    ✉️ Envoyer un email
+                </a>
+            </div>
+        </div>
+        <div class="instagram-card p-6 text-center">
+             <h3 class="text-xl font-semibold mb-2">🗓️ Voyagez à vos dates</h3>
+             <p class="text-gray-700">Les dates ou la durée de ce séjour ne vous conviennent pas ? Contactez-nous ! Nous pouvons vous créer une offre sur mesure.</p>
+             <p class="text-sm text-gray-500 mt-2">Notez que le tarif concurrentiel de cette offre est spécifique à ces dates et conditions.</p>
+        </div>
+        <div class="instagram-card p-6 text-center">
+            <h3 class="text-xl font-semibold mb-4">📞 Contact & Infos</h3>
+            <img src="https://static.wixstatic.com/media/5ca515_449af35c8bea462986caf4fd28e02398~mv2.png" alt="Logo Voyages Privilèges" class="h-12 mx-auto mb-4">
+            <p class="text-gray-800">📍 Rue Winston Churchill 38, 6180 Courcelles</p>
+            <p class="text-gray-800 my-2">📞 <a href="tel:+32488433344" class="text-blue-600">+32 488 43 33 44</a></p>
+            <p class="text-gray-800">✉️ <a href="mailto:voyages-privileges@oldibike.be" class="text-blue-600">voyages-privileges@oldibike.be</a></p>
+            <hr class="my-4">
+            <p class="text-xs text-gray-500">SRL RIDEA (OldiBike)<br>Numéro de société : 1024.916.054 - RC Exploitation : 99730451</p>
+        </div>
+    """
+
     html_template = f"""<!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -707,13 +737,12 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com?plugins=aspect-ratio"></script>
     <style>
         body {{ font-family: 'Poppins', sans-serif; }} .section-title {{ font-family: 'Playfair Display', serif; }}
         .instagram-card {{ background: white; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); overflow: hidden; }}
         .story-card, .instagram-card + .instagram-card {{ margin-top: 20px; }}
         .story-card {{ background: linear-gradient(135deg, #3B82F6 0%, #60A5FA 100%); border-radius: 25px; padding: 25px; color: white; text-align: center; box-shadow: 0 10px 30px rgba(59, 130, 246, 0.3); margin-top: 0; }}
-        .video-container {{ position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 15px; }}
-        .video-container iframe {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; }}
         .image-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; }}
         .image-item img {{ width: 100%; height: 200px; object-fit: cover; transition: transform 0.3s ease; border-radius: 15px;}}
         .economy-highlight {{ background: linear-gradient(45deg, #ffd700, #ffb347); color: #333; padding: 15px; border-radius: 15px; text-align: center; margin-top: 20px; font-weight: bold;}}
@@ -722,6 +751,10 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
 </head>
 <body>
     <div style="max-width: 600px; margin: auto; padding: 10px;">
+        <div style="text-align: center; padding-top: 20px; padding-bottom: 10px;">
+            <img src="https://static.wixstatic.com/media/5ca515_449af35c8bea462986caf4fd28e02398~mv2.png" alt="Logo Voyages Privilèges" style="max-height: 50px; margin: auto;">
+        </div>
+
         <div class="story-card">
             <img src="{real_data['photos'][0] if real_data['photos'] else ''}" alt="{data['hotel_name']}" style="width: 100%; height: 256px; object-fit: cover; border-radius: 8px; margin-bottom: 1rem;">
             <h2 class="text-2xl font-bold">{data['hotel_name']} {stars}</h2>
@@ -766,6 +799,8 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
              <h3 class="section-title text-xl mb-4">Découvrir {data['destination']}</h3>
              {destination_section}
         </div>
+        
+        {footer_html}
     </div>
 </body>
 </html>"""
