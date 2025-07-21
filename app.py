@@ -181,7 +181,7 @@ class RealAPIHotelGatherer:
             'photos': self.get_real_hotel_photos(hotel_name, destination), 
             'reviews': reviews_data.get('reviews', []),
             'hotel_rating': reviews_data.get('rating', 0), 
-            'total_reviews': reviews_data.get('total_reviews', 0),
+            'total_reviews': reviews_data.get('user_ratings_total', 0),
             'videos': self.get_real_youtube_videos(hotel_name, destination), 
             'attractions': attractions_by_category,
             'restaurants': restaurants_list,
@@ -227,10 +227,11 @@ INTERFACE_HTML = r"""
         .success {color: #28a745; font-size: 18px; font-weight: 600; text-align: center;}
         .error {color: #dc3545; font-size: 18px; font-weight: 600;}
         .button-container {margin-top: 20px; display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;}
-        .download-btn, .view-btn, .edit-btn {color: white; border: none; padding: 12px 30px; border-radius: 8px; font-size: 16px; text-decoration: none; cursor: pointer;}
+        .download-btn, .view-btn, .edit-btn, .html-code-btn {color: white; border: none; padding: 12px 30px; border-radius: 8px; font-size: 16px; text-decoration: none; cursor: pointer;}
         .download-btn {background: #28a745;}
         .view-btn {background: #3B82F6;}
         .edit-btn {background: #ffc107; color: #333;}
+        .html-code-btn {background: #6c757d;} /* New style for HTML Code button */
         .video-edit-form { margin-top: 20px; display: flex; gap: 10px; align-items: center; padding: 15px; background-color: #e9ecef; border-radius: 10px;}
         .video-edit-form input { flex-grow: 1; }
         .video-edit-form button { padding: 12px 20px; color: white; border-radius: 8px; border: none; cursor: pointer; font-size: 16px; white-space: nowrap; }
@@ -241,18 +242,65 @@ INTERFACE_HTML = r"""
         .pac-container {z-index: 10000 !important;}
         h3.section-divider {text-align: center; border-bottom: 2px solid #e1e5e9; line-height: 0.1em; margin: 35px 0 25px;}
         h3.section-divider span { background:#fff; padding:0 10px; color: #aaa; font-size: 0.9em; text-transform: uppercase;}
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 700px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            position: relative;
+        }
+        .close-button {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .close-button:hover,
+        .close-button:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .html-textarea {
+            width: 100%;
+            height: 400px;
+            border: 1px solid #ccc;
+            padding: 10px;
+            font-family: monospace;
+            white-space: pre;
+            overflow: auto;
+            resize: vertical;
+            border-radius: 5px;
+        }
+
         @media (max-width: 768px) {.form-row {flex-direction: column; gap: 0;} .form-container {padding: 20px;}}
     </style>
 </head>
 <body>
     <div class="container">
-        <!-- ... header ... -->
         <div class="header">
             <img src="https://static.wixstatic.com/media/5ca515_449af35c8bea462986caf4fd28e02398~mv2.png" alt="Logo" class="header-logo">
             <p>Générateur de présentation</p>
             <div class="user-info"><span>👤 Connecté : {{ username }}</span><a href="/logout">🚪 Déconnexion</a></div>
         </div>
-        <!-- ... form ... -->
         <div class="form-container">
             <form id="voyageForm">
                 <h3 class="section-divider"><span>Détails du Séjour</span></h3>
@@ -308,12 +356,22 @@ INTERFACE_HTML = r"""
         <div class="result" id="result"></div>
     </div>
     
+    <div id="htmlCodeModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">×</span>
+            <h2>Code HTML de la Fiche Voyage</h2>
+            <textarea id="htmlCodeDisplay" class="html-textarea" readonly></textarea>
+<button id="copyHtmlCodeBtn" class="html-code-btn" style="margin-top: 15px;">📋 Copier le code</button>
+<div id="copyStatus" style="text-align:center; font-size: 14px; color: green; margin-top: 5px;"></div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/litepicker/dist/litepicker.js"></script>
     <script>
         function getYouTubeId(url) {
-            const regExp = /^.*(http:\/\/googleusercontent.com\/youtube\.com\/watch\?v=|http:\/\/googleusercontent.com\/youtube\.com\/embed\/|http:\/\/googleusercontent.com\/youtube\.com\/v\/|http:\/\/googleusercontent.com\/youtube\.com\/shorts\/|youtu\.be\/|\/v\/|\/embed\/|watch\?v=|\&v=)([^#\&\?]{11})/;
+            const regExp = /^.*(?:http(?:s)?:\/\/)?(?:www\.)?(?:m\.)?(?:youtube\.com|youtu\.be)\/(?:watch\?v=|embed\/|v\/|shorts\/)?([a-zA-Z0-9_-]{11})(?:\S+)?$/;
             const match = url.match(regExp);
-            return (match && match[2].length === 11) ? match[2] : null;
+            return (match && match[1].length === 11) ? match[1] : null;
         }
 
         function initializeApp() {
@@ -414,6 +472,7 @@ INTERFACE_HTML = r"""
                                 <a href="/download/${data.filename}" class="download-btn">📥 Télécharger</a>
                                 <a href="/view/${data.filename}" class="view-btn" target="_blank">👁️ Ouvrir</a>
                                 <a href="#" id="editVideoBtn" class="edit-btn">✏️ Modifier Vidéo</a>
+                                <button type="button" id="htmlCodeBtn" class="html-code-btn">📄 Code HTML</button>
                             </div>
                             <div id="videoEditContainer" class="video-edit-form" style="display:none;">
                                 <input type="text" id="newVideoUrl" placeholder="Coller la nouvelle URL YouTube ici...">
@@ -442,6 +501,48 @@ INTERFACE_HTML = r"""
                             if (!confirm("Êtes-vous sûr de vouloir supprimer la section vidéo ?")) return;
                             updateVideo({ filename: data.filename, video_id: 'DELETE' });
                         });
+
+                        // New: HTML Code Button Logic
+                        document.getElementById('htmlCodeBtn').addEventListener('click', () => {
+                            const filename = data.filename;
+                            fetch(`/view/${filename}`)
+                                .then(response => response.text())
+                                .then(htmlContent => {
+                                    document.getElementById('htmlCodeDisplay').value = htmlContent;
+                                    document.getElementById('htmlCodeModal').style.display = 'flex'; // Show modal
+                                })
+                                .catch(error => {
+                                    alert('Erreur lors du chargement du code HTML: ' + error.message);
+                                });
+                        });
+
+                        // Close Modal Logic
+                        document.querySelector('.close-button').addEventListener('click', () => {
+                            document.getElementById('htmlCodeModal').style.display = 'none';
+                        });
+                        document.getElementById('copyHtmlCodeBtn').addEventListener('click', () => {
+    const textarea = document.getElementById('htmlCodeDisplay');
+    textarea.select();
+    textarea.setSelectionRange(0, 99999); // Pour mobile
+
+    try {
+        document.execCommand("copy");
+        document.getElementById('copyStatus').textContent = "✅ Code copié dans le presse-papier !";
+    } catch (err) {
+        document.getElementById('copyStatus').textContent = "❌ Impossible de copier.";
+    }
+
+    setTimeout(() => {
+        document.getElementById('copyStatus').textContent = "";
+    }, 2000);
+});
+
+window.addEventListener('click', (event) => {
+                            if (event.target == document.getElementById('htmlCodeModal')) {
+                                document.getElementById('htmlCodeModal').style.display = 'none';
+                            }
+                        });
+
 
                     } else {
                         resultDiv.innerHTML = `<div class="error">❌ Erreur: ${data.error}</div>`;
@@ -539,7 +640,7 @@ def generate():
 @app.route('/update_video', methods=['POST'])
 def update_video():
     if not check_auth():
-        return jsonify({'success': False, 'error': 'Non autorisé'})
+        return jsonify({"success": False, "error": "Non autorisé"})
 
     try:
         data = request.get_json()
@@ -547,51 +648,60 @@ def update_video():
         new_video_id = data.get('video_id')
 
         if not all([filename, new_video_id]):
-            return jsonify({'success': False, 'error': 'Données manquantes.'})
+            return jsonify({"success": False, "error": "Données manquantes."})
 
         if '..' in filename or filename.startswith('/'):
-            return jsonify({'success': False, 'error': 'Nom de fichier invalide.'})
+            return jsonify({"success": False, "error": "Nom de fichier invalide."})
 
         filepath = f"./{filename}"
         if not os.path.exists(filepath):
-            return jsonify({'success': False, 'error': 'Fichier non trouvé.'})
+            return jsonify({"success": False, "error": "Fichier non trouvé."})
 
         with open(filepath, 'r', encoding='utf-8') as f:
             content = f.read()
-        
-        # ✅ CORRECTION: Utilisation d'un commentaire HTML pour un remplacement 100% fiable
-        wrapper_pattern = re.compile(r'<div id="video-section-wrapper".*?<!-- /video-section-wrapper -->', re.DOTALL)
-        
+
+        wrapper_pattern = re.compile(r'<!-- VIDEO-START -->.*?<!-- VIDEO-END -->', re.DOTALL)
+
         if new_video_id == 'DELETE':
             updated_content = wrapper_pattern.sub('', content)
         else:
-            new_video_block_content = f'<div><h4 class="font-semibold mb-2">Visite de l\'hôtel</h4><div class="video-container aspect-w-16 aspect-h-9"><iframe src="https://www.youtube.com/embed/{new_video_id}" title="Vidéo" frameborder="0" allowfullscreen class="w-full h-full rounded-lg"></iframe></div></div>'
-            new_video_block = f'<div id="video-section-wrapper" class="instagram-card p-6"><h3 class="section-title text-xl mb-4">Vidéo</h3>{new_video_block_content}</div><!-- /video-section-wrapper -->'
-            
+            embed_url = f"https://www.youtube.com/embed/{new_video_id}"
+            video_html = f"""<!-- VIDEO-START -->
+<div id="video-section-wrapper" class="instagram-card p-6 mb-6">
+  <h3 class="section-title text-xl mb-4">Vidéo</h3>
+  <div>
+    <h4 class="font-semibold mb-2">Visite de l'hôtel</h4>
+    <div class="video-container aspect-w-16 aspect-h-9">
+      <iframe src="{embed_url}" title="Vidéo" frameborder="0" allowfullscreen class="w-full h-full rounded-lg"></iframe>
+    </div>
+  </div>
+</div>
+<!-- VIDEO-END -->""".format(embed_url=embed_url)
+
             if wrapper_pattern.search(content):
-                # Si le bloc existe, on le remplace
-                updated_content = wrapper_pattern.sub(new_video_block, content)
+                updated_content = wrapper_pattern.sub(video_html, content)
             else:
-                # Sinon, on l'insère après la galerie photo
                 gallery_pattern = re.compile(r'(<div class="instagram-card p-6">\s*<h3 class="section-title text-xl mb-4">Galerie de photos</h3>.*?</div>)', re.DOTALL)
                 if gallery_pattern.search(content):
-                    updated_content = gallery_pattern.sub(rf'\g<1>\n{new_video_block}', content)
+                    updated_content = gallery_pattern.sub(rf'\g<1>\n{video_html}', content)
                 else:
-                    return jsonify({'success': False, 'error': 'Point d\'insertion de la vidéo introuvable.'})
+                    return jsonify({"success": False, "error": "Point d'insertion de la vidéo introuvable."})
 
         with open(filepath, 'w', encoding='utf-8') as f:
             f.write(updated_content)
 
-        return jsonify({'success': True})
+        return jsonify({"success": True})
     except Exception as e:
         print(f"❌ Erreur mise à jour vidéo: {e}")
-        return jsonify({'success': False, 'error': str(e)})
-
+        return jsonify({"success": False, "error": str(e)})
 
 @app.route('/download/<filename>')
 def download_file(filename):
     if not check_auth(): return redirect(url_for('login'))
     try:
+        # Basic security check for filename to prevent directory traversal
+        if '..' in filename or filename.startswith('/'):
+            return "Nom de fichier invalide.", 400
         return send_file(filename, as_attachment=True)
     except Exception as e:
         return jsonify({'error': str(e)}), 404
@@ -600,6 +710,9 @@ def download_file(filename):
 def view_file(filename):
     if not check_auth(): return redirect(url_for('login'))
     try:
+        # Basic security check for filename to prevent directory traversal
+        if '..' in filename or filename.startswith('/'):
+            return "Nom de fichier invalide.", 400
         return send_file(filename)
     except Exception as e:
         return jsonify({'error': str(e)}), 404
@@ -642,9 +755,10 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
     
     video_html_block = ""
     if real_data['videos']:
+        # CORRECTED: Use standard YouTube embed URL
         video_section_content = "".join([f'<div><h4 class="font-semibold mb-2">Visite de l\'hôtel</h4><div class="video-container aspect-w-16 aspect-h-9"><iframe src="https://www.youtube.com/embed/{v["id"]}" title="{v["title"]}" frameborder="0" allowfullscreen class="w-full h-full rounded-lg"></iframe></div></div>' for v in real_data['videos'][:1]])
-        # ✅ CORRECTION: Ajout d'un commentaire HTML pour une suppression fiable
-        video_html_block = f'<div id="video-section-wrapper" class="instagram-card p-6"><h3 class="section-title text-xl mb-4">Vidéo</h3>{video_section_content}</div><!-- /video-section-wrapper -->'
+        # Using a consistent comment marker for robustness
+        video_html_block = f'<!-- VIDEO-START -->\n<div id="video-section-wrapper" class="instagram-card p-6"><h3 class="section-title text-xl mb-4">Vidéo</h3>{video_section_content}</div>\n<!-- VIDEO-END -->'
 
     reviews_section = "".join([f'<div class="bg-gray-50 p-4 rounded-lg"><div><span class="font-semibold">{r["author"]}</span> <span class="text-yellow-500">{r["rating"]}</span> <span class="text-gray-500 text-sm float-right">{r.get("date", "")}</span></div><p class="mt-2 text-gray-700">"{r["text"]}"</p></div>' for r in real_data['reviews']])
     
@@ -754,7 +868,6 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
 </head>
 <body>
     <div style="max-width: 600px; margin: auto; padding: 10px;">
-        <!-- ✅ AJOUT: Logo en début de page -->
         <div style="text-align: center; padding-top: 20px; padding-bottom: 10px;">
             <img src="https://static.wixstatic.com/media/5ca515_449af35c8bea462986caf4fd28e02398~mv2.png" alt="Logo Voyages Privilèges" style="max-height: 50px; margin: auto;">
         </div>
@@ -804,7 +917,6 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
              {destination_section}
         </div>
         
-        <!-- ✅ AJOUT: Blocs de fin de page -->
         {footer_html}
     </div>
 </body>
