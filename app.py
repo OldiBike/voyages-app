@@ -15,7 +15,7 @@ from datetime import datetime
 import os
 import base64
 from urllib.parse import quote_plus
-import re 
+import re
 # ✅ MODIFICATION : Importation de la bibliothèque pour analyser le HTML
 from bs4 import BeautifulSoup
 
@@ -40,7 +40,7 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
-        
+
         if username in USERS and USERS[username] == password:
             session['authenticated'] = True
             session['username'] = username
@@ -48,7 +48,7 @@ def login():
         else:
             error_msg = "❌ Identifiants incorrects"
             return render_template_string(LOGIN_HTML, error=error_msg)
-    
+
     return render_template_string(LOGIN_HTML)
 
 # Déconnexion
@@ -67,7 +67,7 @@ class RealAPIHotelGatherer:
             print("❌ ERREUR CRITIQUE: Variable GOOGLE_API_KEY manquante")
         else:
             print("✅ Clé API Google chargée")
-    
+
     def get_real_hotel_photos(self, hotel_name, destination):
         if not self.google_api_key: return []
         try:
@@ -86,7 +86,7 @@ class RealAPIHotelGatherer:
         except Exception as e:
             print(f"❌ Erreur API Photos: {e}")
             return []
-    
+
     def get_real_hotel_reviews(self, hotel_name, destination):
         if not self.google_api_key: return {'reviews': [], 'rating': 0, 'total_reviews': 0}
         try:
@@ -98,14 +98,36 @@ class RealAPIHotelGatherer:
                 details_url = "https://maps.googleapis.com/maps/api/place/details/json"
                 details_params = {'place_id': place_id, 'fields': 'reviews,rating,user_ratings_total', 'key': self.google_api_key, 'language': 'fr'}
                 details_response = requests.get(details_url, params=details_params, timeout=15)
+
                 if details_response.status_code == 200 and (result := details_response.json().get('result', {})):
-                    reviews = [{'rating': '⭐' * r.get('rating', 0), 'author': r.get('author_name', 'Anonyme'), 'text': r.get('text', '')[:400] + '...', 'date': r.get('relative_time_description', '')} for r in result.get('reviews', []) if r.get('rating', 0) >= 4]
-                    return {'reviews': reviews, 'rating': result.get('rating', 0), 'total_reviews': result.get('user_ratings_total', 0)}
+                    
+                    all_reviews = result.get('reviews', [])
+                    
+                    sorted_reviews = sorted(all_reviews, key=lambda r: (r.get('rating', 0), r.get('time', 0)), reverse=True)
+                    
+                    formatted_reviews = [
+                        {
+                            'rating': '⭐' * r.get('rating', 0), 
+                            'author': r.get('author_name', 'Anonyme'), 
+                            'text': r.get('text', '')[:400] + '...', 
+                            'date': r.get('relative_time_description', '')
+                        } 
+                        for r in sorted_reviews if r.get('rating', 0) >= 4
+                    ]
+                    
+                    total_reviews_count = result.get('user_ratings_total', 0)
+                    
+                    return {
+                        'reviews': formatted_reviews, 
+                        'rating': result.get('rating', 0), 
+                        'total_reviews': total_reviews_count
+                    }
+
             return {'reviews': [], 'rating': 0, 'total_reviews': 0}
         except Exception as e:
             print(f"❌ Erreur API Reviews: {e}")
             return {'reviews': [], 'rating': 0, 'total_reviews': 0}
-    
+
     def get_real_youtube_videos(self, hotel_name, destination):
         if not self.google_api_key: return []
         try:
@@ -118,7 +140,7 @@ class RealAPIHotelGatherer:
         except Exception as e:
             print(f"❌ Erreur API YouTube: {e}")
             return []
-    
+
     def get_attraction_image(self, attraction_name, destination):
         if not self.google_api_key: return None
         print(f"ℹ️ Recherche d'une image réelle pour : {attraction_name} à {destination}")
@@ -147,7 +169,7 @@ class RealAPIHotelGatherer:
             prompt = f'Donne-moi 8 points d\'intérêt pour {destination} et une sélection de 3 des meilleurs restaurants. Réponds UNIQUEMENT en JSON: {{"attractions": [{{"name": "Nom", "type": "plage|culture|gastronomie|activite"}}], "restaurants": [{{"name": "Nom du restaurant"}}]}}'
             response = model.generate_content(prompt)
             response_text = response.text.strip().replace("```json", "").replace("```", "").strip()
-            
+
             try:
                 parsed_data = json.loads(response_text)
                 return {
@@ -176,15 +198,15 @@ class RealAPIHotelGatherer:
         if attractions_by_category.get('culture'):
             first_cultural_attraction = attractions_by_category['culture'][0]
             cultural_attraction_image = self.get_attraction_image(first_cultural_attraction, destination)
-        
+
         reviews_data = self.get_real_hotel_reviews(hotel_name, destination)
-        
+
         return {
-            'photos': self.get_real_hotel_photos(hotel_name, destination), 
+            'photos': self.get_real_hotel_photos(hotel_name, destination),
             'reviews': reviews_data.get('reviews', []),
-            'hotel_rating': reviews_data.get('rating', 0), 
-            'total_reviews': reviews_data.get('user_ratings_total', 0),
-            'videos': self.get_real_youtube_videos(hotel_name, destination), 
+            'hotel_rating': reviews_data.get('rating', 0),
+            'total_reviews': reviews_data.get('total_reviews', 0),
+            'videos': self.get_real_youtube_videos(hotel_name, destination),
             'attractions': attractions_by_category,
             'restaurants': restaurants_list,
             'cultural_attraction_image': cultural_attraction_image
@@ -214,8 +236,9 @@ INTERFACE_HTML = r"""
         .form-container {padding: 40px;}
         .form-group {margin-bottom: 25px; width: 100%;}
         label {display: block; margin-bottom: 8px; font-weight: 600; color: #333;}
-        input, select {width: 100%; padding: 12px; border: 2px solid #e1e5e9; border-radius: 8px; font-size: 16px; box-sizing: border-box;}
-        input:focus, select:focus {outline: none; border-color: #3B82F6;}
+        input, select, textarea {width: 100%; padding: 12px; border: 2px solid #e1e5e9; border-radius: 8px; font-size: 16px; box-sizing: border-box;}
+        input:focus, select:focus, textarea:focus {outline: none; border-color: #3B82F6;}
+        textarea {font-family: 'Segoe UI', sans-serif; resize: vertical; min-height: 80px;}
         #date_range {cursor: pointer; background-color: white;}
         .input-with-button {display: flex; align-items: center; gap: 10px;}
         .search-btn {padding: 8px 12px; font-size: 14px; font-weight: 600; background-color: #e0e0e0; border: 1px solid #ccc; border-radius: 8px; cursor: pointer;}
@@ -227,12 +250,13 @@ INTERFACE_HTML = r"""
         .result {display: none; padding: 30px; background: #f8f9fa; border-top: 1px solid #e1e5e9;}
         .success {color: #28a745; font-size: 18px; font-weight: 600; text-align: center;}
         .error {color: #dc3545; font-size: 18px; font-weight: 600;}
-        .button-container {margin-top: 20px; display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;}
-        .download-btn, .view-btn, .edit-btn, .html-code-btn {color: white; border: none; padding: 12px 30px; border-radius: 8px; font-size: 16px; text-decoration: none; cursor: pointer;}
+        .button-container {margin-top: 20px; display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; align-items: center;}
+        .download-btn, .view-btn, .edit-btn, .html-code-btn, .reset-btn {color: white; border: none; padding: 12px 30px; border-radius: 8px; font-size: 16px; text-decoration: none; cursor: pointer;}
         .download-btn {background: #28a745;}
         .view-btn {background: #3B82F6;}
         .edit-btn {background: #ffc107; color: #333;}
-        .html-code-btn {background: #6c757d;} /* New style for HTML Code button */
+        .html-code-btn {background: #6c757d;}
+        .reset-btn { background: #9ca3af; padding: 8px 12px; font-size: 20px; line-height: 1; }
         .video-edit-form { margin-top: 20px; display: flex; gap: 10px; align-items: center; padding: 15px; background-color: #e9ecef; border-radius: 10px;}
         .video-edit-form input { flex-grow: 1; }
         .video-edit-form button { padding: 12px 20px; color: white; border-radius: 8px; border: none; cursor: pointer; font-size: 16px; white-space: nowrap; }
@@ -243,55 +267,11 @@ INTERFACE_HTML = r"""
         .pac-container {z-index: 10000 !important;}
         h3.section-divider {text-align: center; border-bottom: 2px solid #e1e5e9; line-height: 0.1em; margin: 35px 0 25px;}
         h3.section-divider span { background:#fff; padding:0 10px; color: #aaa; font-size: 0.9em; text-transform: uppercase;}
-        /* Modal styles */
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            overflow: auto;
-            background-color: rgba(0,0,0,0.4);
-            justify-content: center;
-            align-items: center;
-        }
-        .modal-content {
-            background-color: #fefefe;
-            margin: auto;
-            padding: 20px;
-            border: 1px solid #888;
-            width: 80%;
-            max-width: 700px;
-            border-radius: 10px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-            position: relative;
-        }
-        .close-button {
-            color: #aaa;
-            float: right;
-            font-size: 28px;
-            font-weight: bold;
-        }
-        .close-button:hover,
-        .close-button:focus {
-            color: black;
-            text-decoration: none;
-            cursor: pointer;
-        }
-        .html-textarea {
-            width: 100%;
-            height: 400px;
-            border: 1px solid #ccc;
-            padding: 10px;
-            font-family: monospace;
-            white-space: pre;
-            overflow: auto;
-            resize: vertical;
-            border-radius: 5px;
-        }
-
+        .modal { display: none; position: fixed; z-index: 1; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4); justify-content: center; align-items: center; }
+        .modal-content { background-color: #fefefe; margin: auto; padding: 20px; border: 1px solid #888; width: 80%; max-width: 700px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); position: relative; }
+        .close-button { color: #aaa; float: right; font-size: 28px; font-weight: bold; }
+        .close-button:hover, .close-button:focus { color: black; text-decoration: none; cursor: pointer; }
+        .html-textarea { width: 100%; height: 400px; border: 1px solid #ccc; padding: 10px; font-family: monospace; white-space: pre; overflow: auto; resize: vertical; border-radius: 5px; }
         @media (max-width: 768px) {.form-row {flex-direction: column; gap: 0;} .form-container {padding: 20px;}}
     </style>
 </head>
@@ -314,6 +294,7 @@ INTERFACE_HTML = r"""
                 </div>
                 <div class="form-row">
                     <div class="form-group"><label for="stars">⭐ Catégorie de l'hôtel</label><select id="stars" name="stars"><option value="3">3⭐</option><option value="4" selected>4⭐</option><option value="5">5⭐</option></select></div>
+                    <div class="form-group"><label for="num_people">👥 Nombre de personnes</label><input type="number" id="num_people" name="num_people" value="2" min="1"></div>
                 </div>
 
                 <h3 class="section-divider"><span>Détails du Vol & Transferts</span></h3>
@@ -322,13 +303,13 @@ INTERFACE_HTML = r"""
                     <div class="form-group"><label for="arrival_airport">🛬 Aéroport d'arrivée</label><input type="text" id="arrival_airport" name="arrival_airport" placeholder="Saisir un aéroport..."></div>
                 </div>
                 <div class="form-row">
-                    <div class="form-group"><label for="flight_price">💰 Prix du vol (€)</label><div class="input-with-button"><input type="number" id="flight_price" name="flight_price" value="500"><button type="button" id="searchFlightsBtn" class="search-btn" title="Rechercher sur Google Flights">🔎</button></div></div>
-                    <div class="form-group"><label for="transfer_cost">🚐 Coût des Transferts (€)</label><input type="number" id="transfer_cost" name="transfer_cost" value="150"></div>
+                    <div class="form-group"><label for="flight_price">💰 Prix du vol (€)</label><div class="input-with-button"><input type="number" id="flight_price" name="flight_price" value="0"><button type="button" id="searchFlightsBtn" class="search-btn" title="Rechercher sur Google Flights">🔎</button></div></div>
+                    <div class="form-group"><label for="transfer_cost">🚐 Coût des Transferts (€)</label><input type="number" id="transfer_cost" name="transfer_cost" value="0"></div>
                 </div>
                 <div class="form-row">
                     <div class="form-group"><label for="car_rental_cost">🚗 Voiture de location (€)</label><input type="number" id="car_rental_cost" name="car_rental_cost" value="0"></div>
                 </div>
-                
+
                 <h3 class="section-divider"><span>Détails du Prix</span></h3>
                 <div class="form-row">
                     <div class="form-group">
@@ -346,11 +327,19 @@ INTERFACE_HTML = r"""
                 <div class="form-group">
                     <label>🍽️ Surcoût Pension</label>
                     <div class="input-with-button">
-                        <input type="number" id="surcharge_cost" name="surcharge_cost" value="150">
+                        <input type="number" id="surcharge_cost" name="surcharge_cost" value="0">
                         <select id="surcharge_type" name="surcharge_type">
                             <option>Petit déjeuner</option><option>Demi pension</option><option selected>Pension complète</option><option>All-In</option>
                         </select>
                     </div>
+                </div>
+                
+                <h3 class="section-divider"><span>Services Exclusifs</span></h3>
+                <div class="form-group">
+                    <label for="exclusive_services">🎁 Services Exclusifs Inclus</label>
+                    <textarea id="exclusive_services" name="exclusive_services" placeholder="ex: Accès au lounge VIP de l'aéroport
+Une bouteille de champagne en chambre
+Check-out tardif jusqu'à 14h"></textarea>
                 </div>
 
                 <button type="submit" class="generate-btn">🚀 Générer</button>
@@ -359,7 +348,7 @@ INTERFACE_HTML = r"""
         <div class="loading" id="loading"><div class="loading-spinner"></div><h3>🔄 Appels API sécurisés...</h3></div>
         <div class="result" id="result"></div>
     </div>
-    
+
     <div id="htmlCodeModal" class="modal">
         <div class="modal-content">
             <span class="close-button">×</span>
@@ -379,7 +368,6 @@ INTERFACE_HTML = r"""
         }
 
         function initializeApp() {
-            // ... (Initialisation Litepicker & Google Autocomplete)
             new Litepicker({
                 element: document.getElementById('date_range'),
                 singleMode: false, lang: 'fr-FR', format: 'DD MMMM YYYY',
@@ -430,31 +418,30 @@ INTERFACE_HTML = r"""
                 const bookingUrl = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(hotelName)}&checkin=${checkinDate}&checkout=${checkoutDate}&group_adults=2&no_rooms=1`;
                 window.open(bookingUrl, '_blank');
             });
-            
+
             document.getElementById('searchFlightsBtn').addEventListener('click', () => {
                 const departureText = departureInput.value;
                 const arrivalText = arrivalInput.value;
                 const checkinDate = document.getElementById('date_start').value;
                 const checkoutDate = document.getElementById('date_end').value;
-                
+
                 if (!departureText || !arrivalText || !checkinDate || !checkoutDate) {
                     return alert("Veuillez sélectionner les aéroports de départ, d'arrivée et les dates.");
                 }
-                
+
                 const flightsUrl = `https://www.google.com/flights?hl=fr&q=vols+de+${encodeURIComponent(departureText)}+à+${encodeURIComponent(arrivalText)}+le+${checkinDate}+retour+le+${checkoutDate}`;
                 window.open(flightsUrl, '_blank');
             });
-            
-            // --- SOUMISSION DU FORMULAIRE ---
+
             document.getElementById('voyageForm').addEventListener('submit', function(e) {
                 e.preventDefault();
                 const formData = new FormData(this);
                 const data = Object.fromEntries(formData);
                 if (!data.date_start || !data.date_end) return alert("Veuillez sélectionner une période de séjour.");
-                
+
                 document.getElementById('loading').style.display = 'block';
                 document.getElementById('result').style.display = 'none';
-                
+
                 fetch('/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
                 .then(response => response.json())
                 .then(data => {
@@ -477,6 +464,7 @@ INTERFACE_HTML = r"""
                                 <a href="/view/${data.filename}" class="view-btn" target="_blank">👁️ Ouvrir</a>
                                 <a href="#" id="editVideoBtn" class="edit-btn">✏️ Modifier Vidéo</a>
                                 <button type="button" id="htmlCodeBtn" class="html-code-btn">📄 Code HTML</button>
+                                <button type="button" id="resetFormBtn" class="reset-btn" title="Nouvelle recherche">🔄</button>
                             </div>
                             <div id="videoEditContainer" class="video-edit-form" style="display:none;">
                                 <input type="text" id="newVideoUrl" placeholder="Coller la nouvelle URL YouTube ici...">
@@ -485,6 +473,12 @@ INTERFACE_HTML = r"""
                             </div>
                             <div id="editConfirmation" style="font-weight: bold; text-align: center; margin-top: 15px;"></div>`;
 
+                        document.getElementById('resetFormBtn').addEventListener('click', () => {
+                            document.getElementById('voyageForm').reset();
+                            document.getElementById('result').style.display = 'none';
+                            document.querySelector('.form-container').scrollIntoView({ behavior: 'smooth' });
+                        });
+                        
                         document.getElementById('editVideoBtn').addEventListener('click', (e) => {
                             e.preventDefault();
                             document.getElementById('videoEditContainer').style.display = 'flex';
@@ -495,58 +489,40 @@ INTERFACE_HTML = r"""
                             const newUrl = document.getElementById('newVideoUrl').value;
                             const videoId = getYouTubeId(newUrl);
                             if (!videoId) {
-                                alert("URL YouTube invalide. Assurez-vous d'utiliser une URL complète (ex: https://www.youtube.com/watch?v=...).");
+                                alert("URL YouTube invalide.");
                                 return;
                             }
                             updateVideo({ filename: data.filename, video_id: videoId });
                         });
-                        
+
                         document.getElementById('deleteVideoBtn').addEventListener('click', () => {
                             if (!confirm("Êtes-vous sûr de vouloir supprimer la section vidéo ?")) return;
                             updateVideo({ filename: data.filename, video_id: 'DELETE' });
                         });
 
-                        // New: HTML Code Button Logic
                         document.getElementById('htmlCodeBtn').addEventListener('click', () => {
-                            const filename = data.filename;
-                            fetch(`/view/${filename}`)
-                                .then(response => response.text())
-                                .then(htmlContent => {
-                                    document.getElementById('htmlCodeDisplay').value = htmlContent;
-                                    document.getElementById('htmlCodeModal').style.display = 'flex'; // Show modal
-                                })
-                                .catch(error => {
-                                    alert('Erreur lors du chargement du code HTML: ' + error.message);
-                                });
+                            fetch(`/view/${data.filename}`).then(response => response.text())
+                            .then(htmlContent => {
+                                document.getElementById('htmlCodeDisplay').value = htmlContent;
+                                document.getElementById('htmlCodeModal').style.display = 'flex';
+                            });
                         });
-
-                        // Close Modal Logic
                         document.querySelector('.close-button').addEventListener('click', () => {
                             document.getElementById('htmlCodeModal').style.display = 'none';
                         });
                         document.getElementById('copyHtmlCodeBtn').addEventListener('click', () => {
-    const textarea = document.getElementById('htmlCodeDisplay');
-    textarea.select();
-    textarea.setSelectionRange(0, 99999); // Pour mobile
-
-    try {
-        document.execCommand("copy");
-        document.getElementById('copyStatus').textContent = "✅ Code copié dans le presse-papier !";
-    } catch (err) {
-        document.getElementById('copyStatus').textContent = "❌ Impossible de copier.";
-    }
-
-    setTimeout(() => {
-        document.getElementById('copyStatus').textContent = "";
-    }, 2000);
-});
-
-window.addEventListener('click', (event) => {
+                            const textarea = document.getElementById('htmlCodeDisplay');
+                            textarea.select();
+                            document.execCommand("copy");
+                            const copyStatus = document.getElementById('copyStatus');
+                            copyStatus.textContent = "✅ Code copié !";
+                            setTimeout(() => { copyStatus.textContent = ""; }, 2000);
+                        });
+                        window.addEventListener('click', (event) => {
                             if (event.target == document.getElementById('htmlCodeModal')) {
                                 document.getElementById('htmlCodeModal').style.display = 'none';
                             }
                         });
-
 
                     } else {
                         resultDiv.innerHTML = `<div class="error">❌ Erreur: ${data.error}</div>`;
@@ -562,8 +538,6 @@ window.addEventListener('click', (event) => {
             function updateVideo(payload) {
                 const confirmDiv = document.getElementById('editConfirmation');
                 confirmDiv.textContent = "Mise à jour...";
-                confirmDiv.style.color = '#333';
-
                 fetch('/update_video', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -572,10 +546,9 @@ window.addEventListener('click', (event) => {
                 .then(res => res.json())
                 .then(updateStatus => {
                     if (updateStatus.success) {
-                        confirmDiv.textContent = '✅ Opération réussie ! La page a été mise à jour.';
+                        confirmDiv.textContent = '✅ Opération réussie ! Page mise à jour.';
                         confirmDiv.style.color = 'green';
                         document.getElementById('videoEditContainer').style.display = 'none';
-                        // On réaffiche le bouton principal pour permettre une nouvelle modification
                         document.getElementById('editVideoBtn').style.display = 'inline-block';
                     } else {
                         confirmDiv.textContent = `❌ Erreur: ${updateStatus.error}`;
@@ -595,7 +568,7 @@ window.addEventListener('click', (event) => {
 def home():
     if not check_auth():
         return redirect(url_for('login'))
-    
+
     username = session.get('username', 'Utilisateur')
     google_api_key = os.environ.get('GOOGLE_API_KEY', '')
     return render_template_string(INTERFACE_HTML, username=username, google_api_key=google_api_key)
@@ -604,7 +577,7 @@ def home():
 def generate():
     if not check_auth():
         return jsonify({'success': False, 'error': 'Non autorisé'})
-    
+
     try:
         data = request.get_json()
         if not data.get('date_start') or not data.get('date_end'):
@@ -612,39 +585,39 @@ def generate():
 
         real_gatherer = RealAPIHotelGatherer()
         real_data = real_gatherer.gather_all_real_data(data['hotel_name'], data['destination'])
-        
+
         try:
             hotel_price = int(data.get('booking_price', 0))
-            flight_price = int(data.get('flight_price', 500))
+            flight_price = int(data.get('flight_price', 0))
             transfer_cost = int(data.get('transfer_cost', 0))
             surcharge_cost = int(data.get('surcharge_cost', 0))
             your_price = int(data.get('price', 0))
             car_rental_cost = int(data.get('car_rental_cost', 0))
-            
+
             comparison_total = hotel_price + flight_price + transfer_cost + surcharge_cost + car_rental_cost
             savings = comparison_total - your_price
         except (ValueError, TypeError):
             comparison_total, savings = 0, 0
 
         html_content = generate_travel_page_real_data(data, real_data, savings, comparison_total)
-        
+
         filename = f"voyage_secure_{data['hotel_name'].replace(' ', '_').lower()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
         filepath = f"./{filename}"
         with open(filepath, 'w', encoding='utf-8') as f:
             f.write(html_content)
-        
+
         return jsonify({
             'success': True, 'filename': filename,
             'real_photos_count': len(real_data['photos']), 'real_videos_count': len(real_data['videos']),
-            'real_reviews_count': len(real_data['reviews']), 'real_attractions_count': sum(len(v) for v in real_data['attractions'].values()),
+            'real_reviews_count': real_data['total_reviews'],
+            'real_attractions_count': sum(len(v) for v in real_data['attractions'].values()),
             'savings': savings
         })
-        
+
     except Exception as e:
         print(f"❌ Erreur génération: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
-# ✅ MODIFICATION : Réécriture complète de la fonction avec BeautifulSoup pour la robustesse
 @app.route('/update_video', methods=['POST'])
 def update_video():
     if not check_auth():
@@ -668,32 +641,24 @@ def update_video():
         with open(filepath, 'r', encoding='utf-8') as f:
             content = f.read()
 
-        # Utilisation de BeautifulSoup pour analyser le HTML
         soup = BeautifulSoup(content, 'lxml')
-
-        # Trouver le conteneur de la vidéo par son ID
         video_wrapper = soup.find(id='video-section-wrapper')
 
         if new_video_id == 'DELETE':
             if video_wrapper:
-                video_wrapper.decompose()  # Supprime proprement le bloc vidéo
-            else:
-                # Si le bloc n'existe pas, il n'y a rien à faire, c'est un succès.
-                pass
+                video_wrapper.decompose()
         else:
             embed_url = f"https://www.youtube.com/embed/{new_video_id}"
             if video_wrapper:
-                # Si le bloc existe, on met juste à jour l'URL de l'iframe
                 iframe = video_wrapper.find('iframe')
                 if iframe:
                     iframe['src'] = embed_url
-                else: # Au cas où l'iframe aurait été supprimé manuellement
+                else:
                     return jsonify({"success": False, "error": "Structure interne de la vidéo corrompue."})
             else:
-                # Si le bloc n'existe pas, on le crée et on l'insère après la galerie
                 gallery_section = soup.find(id='gallery-section')
                 if not gallery_section:
-                    return jsonify({"success": False, "error": "Point d'insertion (galerie) introuvable pour ajouter la vidéo."})
+                    return jsonify({"success": False, "error": "Point d'insertion (galerie) introuvable."})
 
                 video_html_string = f"""
                 <div class="instagram-card p-6" id="video-section-wrapper">
@@ -705,12 +670,9 @@ def update_video():
                         </div>
                     </div>
                 </div>"""
-                
-                # On transforme le string en objet Soup pour pouvoir l'insérer
                 new_video_soup = BeautifulSoup(video_html_string, 'lxml')
                 gallery_section.insert_after(new_video_soup)
 
-        # On sauvegarde le document HTML modifié
         with open(filepath, 'w', encoding='utf-8') as f:
             f.write(str(soup))
 
@@ -741,22 +703,57 @@ def view_file(filename):
         return jsonify({'error': str(e)}), 404
 
 def generate_travel_page_real_data(data, real_data, savings, comparison_total):
-    
+
     date_start = datetime.strptime(data['date_start'], '%Y-%m-%d').strftime('%d %B %Y')
     date_end = datetime.strptime(data['date_end'], '%Y-%m-%d').strftime('%d %B %Y')
-    
+
     stars = "⭐" * int(data['stars'])
-    
+
+    num_people = int(data.get('num_people', 2))
+    price_for_text = f"pour {num_people} personnes" if num_people > 1 else "pour 1 personne"
+
+    your_price = int(data.get('price', 0))
+    price_per_person_text = ""
+    if num_people > 0:
+        price_per_person = round(your_price / num_people)
+        price_per_person_text = f'<p class="text-sm font-light mt-1">soit {price_per_person} € par personne</p>'
+
+    exclusive_services = data.get('exclusive_services', '').strip()
+    exclusive_services_html = ""
+    if exclusive_services:
+        formatted_services = exclusive_services.replace('\n', '<br>')
+        exclusive_services_html = f"""
+        <div class="p-4 mt-4 rounded-lg border-2 border-blue-200 bg-blue-50">
+            <h4 class="font-bold text-blue-800 mb-2">Nos Services additionnels offerts</h4>
+            <p class="text-sm text-gray-700">{formatted_services}</p>
+        </div>
+        """
+
     departure_airport_name = data.get('departure_city', '').split(',')[0]
     arrival_airport_name = data.get('arrival_airport', data['destination']).split(',')[0]
-    flight_price = int(data.get('flight_price', 500))
-    flight_text = f"Vol {departure_airport_name} ↔ {arrival_airport_name}"
-    flight_price_text = f"{flight_price}€"
+    flight_price = int(data.get('flight_price', 0))
+    
+    # ✅ CORRECTION : Logique conditionnelle pour le vol et les bagages
+    flight_text_html = ""
+    flight_inclusion_html = ""
+    baggage_inclusion_html = ""
 
+    if flight_price > 0:
+        flight_text = f"Vol {departure_airport_name} ↔ {arrival_airport_name}"
+        flight_price_text = f"{flight_price}€"
+        flight_text_html = f"""<div class="flex justify-between"><span>{flight_text}</span><span class="font-semibold">{flight_price_text}</span></div>"""
+        flight_inclusion_html = f"""<div class="flex items-center"><div class="feature-icon bg-blue-500"><i class="fas fa-plane"></i></div><div class="ml-4"><h4 class="font-semibold text-sm">{flight_text}</h4><p class="text-gray-600 text-xs">Aller-retour inclus</p></div></div>"""
+        baggage_inclusion_html = """<div class="flex items-center"><div class="feature-icon bg-red-500"><i class="fas fa-suitcase"></i></div><div class="ml-4"><h4 class="font-semibold text-sm">Bagages 10kg</h4><p class="text-gray-600 text-xs">Bagage cabine inclus</p></div></div>"""
+
+
+    # ✅ CORRECTION : Logique conditionnelle pour les transferts
     transfer_cost = int(data.get('transfer_cost', 0))
     transfer_text_html = ""
+    transfer_inclusion_html = ""
     if transfer_cost > 0:
         transfer_text_html = f"""<div class="flex justify-between"><span>+ Transferts</span><span class="font-semibold">~{transfer_cost}€</span></div>"""
+        transfer_inclusion_html = """<div class="flex items-center"><div class="feature-icon bg-green-500"><i class="fas fa-bus"></i></div><div class="ml-4"><h4 class="font-semibold text-sm">Transfert aéroport ↔ hôtel</h4><p class="text-gray-600 text-xs">Prise en charge complète</p></div></div>"""
+
 
     surcharge_type = data.get('surcharge_type', '')
     surcharge_cost = int(data.get('surcharge_cost', 0))
@@ -766,11 +763,9 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
 
     car_rental_cost = int(data.get('car_rental_cost', 0))
     car_rental_text_html = ""
-    if car_rental_cost > 0:
-        car_rental_text_html = f"""<div class="flex justify-between"><span>+ Voiture de location</span><span class="font-semibold">~{car_rental_cost}€</span></div>"""
-
     car_rental_inclusion_html = ""
     if car_rental_cost > 0:
+        car_rental_text_html = f"""<div class="flex justify-between"><span>+ Voiture de location (sans franchise)</span><span class="font-semibold">~{car_rental_cost}€</span></div>"""
         car_rental_inclusion_html = """
         <div class="flex items-center"><div class="feature-icon bg-gray-500"><i class="fas fa-car"></i></div><div class="ml-4"><h4 class="font-semibold text-sm">Voiture de location (sans franchise)</h4><p class="text-gray-600 text-xs">Explorez à votre rythme</p></div></div>
         """
@@ -779,7 +774,7 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
 
     comparison_block = f"""
         <div class="flex justify-between"><span>Hôtel ({data.get('stars')}⭐)</span><span class="font-semibold">{hotel_price_text}</span></div>
-        <div class="flex justify-between"><span>{flight_text}</span><span class="font-semibold">{flight_price_text}</span></div>
+        {flight_text_html}
         {transfer_text_html}
         {car_rental_text_html}
         {surcharge_text_html}
@@ -787,17 +782,16 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
     """
 
     image_gallery = "".join([f'<div class="image-item"><img src="{url}" alt="Photo de {data["hotel_name"]}"></div>\n' for url in real_data['photos']]) if real_data['photos'] else '<p>Aucune photo disponible.</p>'
-    
+
     video_html_block = ""
     if real_data['videos']:
         embed_url = f"https://www.youtube.com/embed/{real_data['videos'][0]['id']}"
         video_title = real_data['videos'][0]['title']
         video_section_content = f'<div><h4 class="font-semibold mb-2">Visite de l\'hôtel</h4><div class="video-container aspect-w-16 aspect-h-9"><iframe src="{embed_url}" title="{video_title}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen class="w-full h-full rounded-lg"></iframe></div></div>'
-        # ✅ MODIFICATION : Ajout d'un ID unique au conteneur de la vidéo
         video_html_block = f'<div id="video-section-wrapper" class="instagram-card p-6"><h3 class="section-title text-xl mb-4">Vidéo</h3>{video_section_content}</div>'
 
     reviews_section = "".join([f'<div class="bg-gray-50 p-4 rounded-lg"><div><span class="font-semibold">{r["author"]}</span> <span class="text-yellow-500">{r["rating"]}</span> <span class="text-gray-500 text-sm float-right">{r.get("date", "")}</span></div><p class="mt-2 text-gray-700">"{r["text"]}"</p></div>' for r in real_data['reviews']])
-    
+
     destination_section = ""
     if real_data.get('cultural_attraction_image'):
         cultural_attraction_name = real_data['attractions']['culture'][0] if real_data['attractions']['culture'] else ''
@@ -825,7 +819,7 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
     icons = {'plages': 'fa-water', 'culture': 'fa-monument', 'gastronomie': 'fa-utensils', 'activites': 'fa-map-signs'}
     colors = {'plages': 'bg-blue-500', 'culture': 'bg-purple-500', 'gastronomie': 'bg-green-500', 'activites': 'bg-orange-500'}
     categories = {'plages': 'Plages & Nature', 'culture': 'Culture & Histoire', 'gastronomie': 'Gastronomie Locale', 'activites': 'Activités & Loisirs'}
-    
+
     attractions_to_display = real_data.get('attractions', {})
     flat_attractions = []
     for category, attractions in attractions_to_display.items():
@@ -844,7 +838,7 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
                      <p class="text-gray-500 text-xs">{categories.get(attr['category'])}</p>
                  </div>
              </div>"""
-        
+
         destination_section += f"""
         <div>
             <h4 class="font-semibold text-lg mb-3 text-gray-800">À explorer également</h4>
@@ -853,7 +847,7 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
             </div>
         </div>
         """
-    
+
     footer_html = f"""
         <div class="instagram-card p-6 bg-blue-500 text-white text-center">
             <h3 class="text-2xl font-bold mb-2">🌟 Réservez votre évasion !</h3>
@@ -914,18 +908,19 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
             <p>📍 {data['destination']}</p>
             <p>🗓️ Du {date_start} au {date_end}</p>
             <div class="text-4xl font-bold mt-2">{data['price']} €</div>
-            <p>pour 2 personnes</p>
-            {f'<p class="text-sm mt-2">Note Google: {real_data["hotel_rating"]}/5 ({real_data["total_reviews"]} avis)</p>' if real_data['hotel_rating'] > 0 else ''}
+            <p>{price_for_text}</p>
+            {price_per_person_text}
+            {f'<p class="text-sm mt-2">Note Google: {real_data["hotel_rating"]}/5 ({real_data["total_reviews"]} avis)</p>' if real_data["hotel_rating"] > 0 else ""}
         </div>
         <div class="instagram-card p-6">
             <h3 class="section-title text-xl mb-4">Inclus dans votre séjour</h3>
             <div class="space-y-5">
-                <div class="flex items-center"><div class="feature-icon bg-blue-500"><i class="fas fa-plane"></i></div><div class="ml-4"><h4 class="font-semibold text-sm">{flight_text}</h4><p class="text-gray-600 text-xs">Aller-retour inclus</p></div></div>
-                <div class="flex items-center"><div class="feature-icon bg-green-500"><i class="fas fa-bus"></i></div><div class="ml-4"><h4 class="font-semibold text-sm">Transfert aéroport ↔ hôtel</h4><p class="text-gray-600 text-xs">Prise en charge complète</p></div></div>
+                {flight_inclusion_html}
+                {transfer_inclusion_html}
                 {car_rental_inclusion_html}
                 <div class="flex items-center"><div class="feature-icon bg-purple-500"><i class="fas fa-hotel"></i></div><div class="ml-4"><h4 class="font-semibold text-sm">Hôtel {stars} {data['hotel_name']}</h4><p class="text-gray-600 text-xs">Style traditionnel</p></div></div>
                 <div class="flex items-center"><div class="feature-icon bg-yellow-500"><i class="fas fa-utensils"></i></div><div class="ml-4"><h4 class="font-semibold text-sm">{data.get('surcharge_type', 'Pension complète')}</h4><p class="text-gray-600 text-xs">Inclus dans le forfait</p></div></div>
-                <div class="flex items-center"><div class="feature-icon bg-red-500"><i class="fas fa-suitcase"></i></div><div class="ml-4"><h4 class="font-semibold text-sm">Bagages 10kg</h4><p class="text-gray-600 text-xs">Bagage cabine inclus</p></div></div>
+                {baggage_inclusion_html}
             </div>
         </div>
         <div class="instagram-card p-6">
@@ -934,6 +929,7 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
                 <h4 class="font-bold text-center mb-2">Prix estimé ailleurs</h4>
                 <div class="text-sm space-y-1">{comparison_block}</div>
             </div>
+            {exclusive_services_html}
             <div class="p-4 rounded-lg bg-green-600 text-white">
                  <h4 class="font-bold text-center mb-2">Notre Offre</h4>
                  <div class="text-center text-2xl font-bold">{data['price']} €</div>
@@ -953,7 +949,7 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
              <h3 class="section-title text-xl mb-4">Découvrir {data['destination']}</h3>
              {destination_section}
         </div>
-        
+
         {footer_html}
     </div>
 </body>
