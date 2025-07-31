@@ -237,9 +237,10 @@ INTERFACE_HTML = r"""
         .form-group {margin-bottom: 25px; width: 100%;}
         label {display: block; margin-bottom: 8px; font-weight: 600; color: #333;}
         input, select, textarea {width: 100%; padding: 12px; border: 2px solid #e1e5e9; border-radius: 8px; font-size: 16px; box-sizing: border-box;}
+        input[type="checkbox"] { width: auto; }
         input:focus, select:focus, textarea:focus {outline: none; border-color: #3B82F6;}
         textarea {font-family: 'Segoe UI', sans-serif; resize: vertical; min-height: 80px;}
-        #date_range {cursor: pointer; background-color: white;}
+        #date_range, #cancellation_date {cursor: pointer; background-color: white;}
         .input-with-button {display: flex; align-items: center; gap: 10px;}
         .search-btn {padding: 8px 12px; font-size: 14px; font-weight: 600; background-color: #e0e0e0; border: 1px solid #ccc; border-radius: 8px; cursor: pointer;}
         .form-row {display: flex; gap: 20px;}
@@ -324,6 +325,19 @@ INTERFACE_HTML = r"""
                         </div>
                     </div>
                 </div>
+                
+                <div class="form-group">
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <div style="display: flex; align-items: center; flex-shrink: 0;">
+                            <input type="checkbox" id="has_cancellation" name="has_cancellation">
+                            <label for="has_cancellation" style="margin-bottom: 0;">Annulation gratuite</label>
+                        </div>
+                        <div id="cancellation_date_wrapper" style="display: none; flex-grow: 1;">
+                            <input type="text" id="cancellation_date" name="cancellation_date" readonly placeholder="Jusqu'au...">
+                        </div>
+                    </div>
+                </div>
+
                 <div class="form-group">
                     <label>🍽️ Surcoût Pension</label>
                     <div class="input-with-button">
@@ -368,7 +382,6 @@ Check-out tardif jusqu'à 14h"></textarea>
         }
 
         function initializeApp() {
-            // ✅ MODIFICATION : Fonction de formatage de date corrigée pour éviter les pbs de fuseau horaire
             const formatDate = (d) => {
                 const year = d.getFullYear();
                 const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -387,26 +400,39 @@ Check-out tardif jusqu'à 14h"></textarea>
                 },
             });
 
+            // ✅ MODIFICATION : Ajout de la logique JS pour l'annulation
+            new Litepicker({
+                element: document.getElementById('cancellation_date'),
+                singleMode: true,
+                lang: 'fr-FR',
+                format: 'DD MMMM YYYY'
+            });
+
+            const cancellationCheckbox = document.getElementById('has_cancellation');
+            const cancellationDateWrapper = document.getElementById('cancellation_date_wrapper');
+            cancellationCheckbox.addEventListener('change', function() {
+                if (this.checked) {
+                    cancellationDateWrapper.style.display = 'block';
+                } else {
+                    cancellationDateWrapper.style.display = 'none';
+                }
+            });
+
             const hotelInput = document.getElementById('hotel_name');
             const destinationInput = document.getElementById('destination');
             const starsSelect = document.getElementById('stars');
             const departureInput = document.getElementById('departure_city');
             const arrivalInput = document.getElementById('arrival_airport');
             const flightPriceInput = document.getElementById('flight_price');
-
-            // ✅ MODIFICATION : Logique pour rendre les aéroports obligatoires si le vol > 0
+            
             const toggleAirportRequirement = () => {
                 const price = parseFloat(flightPriceInput.value) || 0;
-                if (price > 0) {
-                    departureInput.required = true;
-                    arrivalInput.required = true;
-                } else {
-                    departureInput.required = false;
-                    arrivalInput.required = false;
-                }
+                const required = price > 0;
+                departureInput.required = required;
+                arrivalInput.required = required;
             };
             flightPriceInput.addEventListener('input', toggleAirportRequirement);
-            toggleAirportRequirement(); // Appel initial pour définir l'état de départ
+            toggleAirportRequirement();
 
             new google.maps.places.Autocomplete(departureInput, { types: ['airport'] });
             new google.maps.places.Autocomplete(arrivalInput, { types: ['airport'] });
@@ -499,6 +525,7 @@ Check-out tardif jusqu'à 14h"></textarea>
 
                         document.getElementById('resetFormBtn').addEventListener('click', () => {
                             document.getElementById('voyageForm').reset();
+                            cancellationDateWrapper.style.display = 'none';
                             document.getElementById('result').style.display = 'none';
                             document.querySelector('.form-container').scrollIntoView({ behavior: 'smooth' });
                         });
@@ -742,8 +769,13 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
         price_per_person = round(your_price / num_people)
         price_per_person_text = f'<p class="text-sm font-light mt-1">soit {price_per_person} € par personne</p>'
     
-    full_destination = data.get('destination', '')
-    city_name = full_destination.split(',')[0].strip()
+    # ✅ MODIFICATION : Ajout de la logique pour l'annulation gratuite
+    cancellation_html = ""
+    if data.get('has_cancellation') == 'on' and data.get('cancellation_date'):
+        cancellation_date = data.get('cancellation_date')
+        cancellation_html = f'<p class="text-xs font-light mt-1">✓ Annulation gratuite jusqu\'au {cancellation_date}</p>'
+
+    city_name = data.get('destination', '').split(',')[0].strip()
 
     exclusive_services = data.get('exclusive_services', '').strip()
     exclusive_services_html = ""
@@ -956,6 +988,7 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
             <div class="p-4 rounded-lg bg-green-600 text-white">
                  <h4 class="font-bold text-center mb-2">Notre Offre</h4>
                  <div class="text-center text-2xl font-bold">{data['price']} €</div>
+                 {cancellation_html}
             </div>
             <div class="economy-highlight">💰 Vous économisez {savings} € !</div>
         </div>
