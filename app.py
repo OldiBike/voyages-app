@@ -772,7 +772,7 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
     car_rental_inclusion_html = ""
     if car_rental_cost > 0:
         car_rental_inclusion_html = """
-        <div class="flex items-center"><div class="feature-icon bg-gray-500"><i class="fas fa-car"></i></div><div class="ml-4"><h4 class="font-semibold text-sm">Voiture de location</h4><p class="text-gray-600 text-xs">Explorez à votre rythme</p></div></div>
+        <div class="flex items-center"><div class="feature-icon bg-gray-500"><i class="fas fa-car"></i></div><div class="ml-4"><h4 class="font-semibold text-sm">Voiture de location (sans franchise)</h4><p class="text-gray-600 text-xs">Explorez à votre rythme</p></div></div>
         """
 
     hotel_price_text = f"{data.get('booking_price', 'N/A')} €"
