@@ -8,3 +8,4 @@ unidecode
 pydrive2
 python-slugify
 beautifulsoup4
+lxml
