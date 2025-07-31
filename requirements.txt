@@ -7,3 +7,4 @@ python-dotenv
 unidecode
 pydrive2
 python-slugify
+beautifulsoup4
