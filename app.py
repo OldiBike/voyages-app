@@ -15,7 +15,9 @@ from datetime import datetime
 import os
 import base64
 from urllib.parse import quote_plus
-import re # ✅ AJOUT: Importation pour les expressions régulières
+import re 
+# ✅ MODIFICATION : Importation de la bibliothèque pour analyser le HTML
+from bs4 import BeautifulSoup
 
 app = Flask(__name__)
 
@@ -189,7 +191,6 @@ class RealAPIHotelGatherer:
         }
 
 
-# ... (LOGIN_HTML reste identique) ...
 LOGIN_HTML = """
 <!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>🔐 Connexion</title><style>body{font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin:0; padding:20px; min-height:100vh; display:flex; align-items:center; justify-content:center;}.login-container{background:white; border-radius:20px; box-shadow:0 20px 40px rgba(0,0,0,0.1); padding:40px; width:400px; text-align:center;}.login-header h1{font-size: 2em;}.form-group{margin-bottom:20px; text-align:left;}label{display:block; margin-bottom:8px; font-weight:600;}input{width:100%; padding:12px; border:2px solid #e1e5e9; border-radius:8px; font-size:16px; box-sizing:border-box;}input:focus{outline:none; border-color:#3B82F6;}.login-btn{background: linear-gradient(45deg, #3B82F6, #60A5FA); color:white; border:none; padding:15px 40px; border-radius:25px; font-size:18px; font-weight:600; cursor:pointer; width:100%;}.error{color:#dc3545; margin-top:15px; font-weight:600;}.logo{max-width:200px; margin-bottom:20px;}</style></head><body><div class="login-container"><div class="login-header"><img src="https://static.wixstatic.com/media/5ca515_449af35c8bea462986caf4fd28e02398~mv2.png" alt="Logo" class="logo"><h1>🔐 Connexion</h1></div><form method="POST"><div class="form-group"><label for="username">👤 Nom d'utilisateur</label><input type="text" id="username" name="username" required></div><div class="form-group"><label for="password">🔑 Mot de passe</label><input type="password" id="password" name="password" required></div><button type="submit" class="login-btn">🚀 Se connecter</button>{% if error %}<div class="error">{{ error }}</div>{% endif %}</form></div></body></html>
 """
@@ -323,6 +324,9 @@ INTERFACE_HTML = r"""
                 <div class="form-row">
                     <div class="form-group"><label for="flight_price">💰 Prix du vol (€)</label><div class="input-with-button"><input type="number" id="flight_price" name="flight_price" value="500"><button type="button" id="searchFlightsBtn" class="search-btn" title="Rechercher sur Google Flights">🔎</button></div></div>
                     <div class="form-group"><label for="transfer_cost">🚐 Coût des Transferts (€)</label><input type="number" id="transfer_cost" name="transfer_cost" value="150"></div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group"><label for="car_rental_cost">🚗 Voiture de location (€)</label><input type="number" id="car_rental_cost" name="car_rental_cost" value="0"></div>
                 </div>
                 
                 <h3 class="section-divider"><span>Détails du Prix</span></h3>
@@ -571,6 +575,8 @@ window.addEventListener('click', (event) => {
                         confirmDiv.textContent = '✅ Opération réussie ! La page a été mise à jour.';
                         confirmDiv.style.color = 'green';
                         document.getElementById('videoEditContainer').style.display = 'none';
+                        // On réaffiche le bouton principal pour permettre une nouvelle modification
+                        document.getElementById('editVideoBtn').style.display = 'inline-block';
                     } else {
                         confirmDiv.textContent = `❌ Erreur: ${updateStatus.error}`;
                         confirmDiv.style.color = 'red';
@@ -613,8 +619,9 @@ def generate():
             transfer_cost = int(data.get('transfer_cost', 0))
             surcharge_cost = int(data.get('surcharge_cost', 0))
             your_price = int(data.get('price', 0))
+            car_rental_cost = int(data.get('car_rental_cost', 0))
             
-            comparison_total = hotel_price + flight_price + transfer_cost + surcharge_cost
+            comparison_total = hotel_price + flight_price + transfer_cost + surcharge_cost + car_rental_cost
             savings = comparison_total - your_price
         except (ValueError, TypeError):
             comparison_total, savings = 0, 0
@@ -637,6 +644,7 @@ def generate():
         print(f"❌ Erreur génération: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
+# ✅ MODIFICATION : Réécriture complète de la fonction avec BeautifulSoup pour la robustesse
 @app.route('/update_video', methods=['POST'])
 def update_video():
     if not check_auth():
@@ -660,46 +668,62 @@ def update_video():
         with open(filepath, 'r', encoding='utf-8') as f:
             content = f.read()
 
-        wrapper_pattern = re.compile(r'<!-- VIDEO-START -->.*?<!-- VIDEO-END -->', re.DOTALL)
+        # Utilisation de BeautifulSoup pour analyser le HTML
+        soup = BeautifulSoup(content, 'lxml')
+
+        # Trouver le conteneur de la vidéo par son ID
+        video_wrapper = soup.find(id='video-section-wrapper')
 
         if new_video_id == 'DELETE':
-            updated_content = wrapper_pattern.sub('', content)
+            if video_wrapper:
+                video_wrapper.decompose()  # Supprime proprement le bloc vidéo
+            else:
+                # Si le bloc n'existe pas, il n'y a rien à faire, c'est un succès.
+                pass
         else:
             embed_url = f"https://www.youtube.com/embed/{new_video_id}"
-            video_html = f"""<!-- VIDEO-START -->
-<div id="video-section-wrapper" class="instagram-card p-6 mb-6">
-  <h3 class="section-title text-xl mb-4">Vidéo</h3>
-  <div>
-    <h4 class="font-semibold mb-2">Visite de l'hôtel</h4>
-    <div class="video-container aspect-w-16 aspect-h-9">
-      <iframe src="{embed_url}" title="Vidéo" frameborder="0" allowfullscreen class="w-full h-full rounded-lg"></iframe>
-    </div>
-  </div>
-</div>
-<!-- VIDEO-END -->""".format(embed_url=embed_url)
-
-            if wrapper_pattern.search(content):
-                updated_content = wrapper_pattern.sub(video_html, content)
+            if video_wrapper:
+                # Si le bloc existe, on met juste à jour l'URL de l'iframe
+                iframe = video_wrapper.find('iframe')
+                if iframe:
+                    iframe['src'] = embed_url
+                else: # Au cas où l'iframe aurait été supprimé manuellement
+                    return jsonify({"success": False, "error": "Structure interne de la vidéo corrompue."})
             else:
-                gallery_pattern = re.compile(r'(<div class="instagram-card p-6">\s*<h3 class="section-title text-xl mb-4">Galerie de photos</h3>.*?</div>)', re.DOTALL)
-                if gallery_pattern.search(content):
-                    updated_content = gallery_pattern.sub(rf'\g<1>\n{video_html}', content)
-                else:
-                    return jsonify({"success": False, "error": "Point d'insertion de la vidéo introuvable."})
+                # Si le bloc n'existe pas, on le crée et on l'insère après la galerie
+                gallery_section = soup.find(id='gallery-section')
+                if not gallery_section:
+                    return jsonify({"success": False, "error": "Point d'insertion (galerie) introuvable pour ajouter la vidéo."})
 
+                video_html_string = f"""
+                <div class="instagram-card p-6" id="video-section-wrapper">
+                    <h3 class="section-title text-xl mb-4">Vidéo</h3>
+                    <div>
+                        <h4 class="font-semibold mb-2">Visite de l'hôtel</h4>
+                        <div class="video-container aspect-w-16 aspect-h-9">
+                        <iframe src="{embed_url}" title="Vidéo" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen="" class="w-full h-full rounded-lg"></iframe>
+                        </div>
+                    </div>
+                </div>"""
+                
+                # On transforme le string en objet Soup pour pouvoir l'insérer
+                new_video_soup = BeautifulSoup(video_html_string, 'lxml')
+                gallery_section.insert_after(new_video_soup)
+
+        # On sauvegarde le document HTML modifié
         with open(filepath, 'w', encoding='utf-8') as f:
-            f.write(updated_content)
+            f.write(str(soup))
 
         return jsonify({"success": True})
     except Exception as e:
         print(f"❌ Erreur mise à jour vidéo: {e}")
         return jsonify({"success": False, "error": str(e)})
 
+
 @app.route('/download/<filename>')
 def download_file(filename):
     if not check_auth(): return redirect(url_for('login'))
     try:
-        # Basic security check for filename to prevent directory traversal
         if '..' in filename or filename.startswith('/'):
             return "Nom de fichier invalide.", 400
         return send_file(filename, as_attachment=True)
@@ -710,7 +734,6 @@ def download_file(filename):
 def view_file(filename):
     if not check_auth(): return redirect(url_for('login'))
     try:
-        # Basic security check for filename to prevent directory traversal
         if '..' in filename or filename.startswith('/'):
             return "Nom de fichier invalide.", 400
         return send_file(filename)
@@ -741,12 +764,24 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
     if surcharge_cost > 0:
         surcharge_text_html = f"""<div class="flex justify-between"><span>+ Surcoût {surcharge_type}</span><span class="font-semibold">~{surcharge_cost}€</span></div>"""
 
+    car_rental_cost = int(data.get('car_rental_cost', 0))
+    car_rental_text_html = ""
+    if car_rental_cost > 0:
+        car_rental_text_html = f"""<div class="flex justify-between"><span>+ Voiture de location</span><span class="font-semibold">~{car_rental_cost}€</span></div>"""
+
+    car_rental_inclusion_html = ""
+    if car_rental_cost > 0:
+        car_rental_inclusion_html = """
+        <div class="flex items-center"><div class="feature-icon bg-gray-500"><i class="fas fa-car"></i></div><div class="ml-4"><h4 class="font-semibold text-sm">Voiture de location</h4><p class="text-gray-600 text-xs">Explorez à votre rythme</p></div></div>
+        """
+
     hotel_price_text = f"{data.get('booking_price', 'N/A')} €"
 
     comparison_block = f"""
         <div class="flex justify-between"><span>Hôtel ({data.get('stars')}⭐)</span><span class="font-semibold">{hotel_price_text}</span></div>
         <div class="flex justify-between"><span>{flight_text}</span><span class="font-semibold">{flight_price_text}</span></div>
         {transfer_text_html}
+        {car_rental_text_html}
         {surcharge_text_html}
         <hr class="my-3"><div class="flex justify-between text-base font-bold text-red-600"><span>TOTAL ESTIMÉ</span><span>{comparison_total} €</span></div>
     """
@@ -755,10 +790,11 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
     
     video_html_block = ""
     if real_data['videos']:
-        # CORRECTED: Use standard YouTube embed URL
-        video_section_content = "".join([f'<div><h4 class="font-semibold mb-2">Visite de l\'hôtel</h4><div class="video-container aspect-w-16 aspect-h-9"><iframe src="https://www.youtube.com/embed/{v["id"]}" title="{v["title"]}" frameborder="0" allowfullscreen class="w-full h-full rounded-lg"></iframe></div></div>' for v in real_data['videos'][:1]])
-        # Using a consistent comment marker for robustness
-        video_html_block = f'<!-- VIDEO-START -->\n<div id="video-section-wrapper" class="instagram-card p-6"><h3 class="section-title text-xl mb-4">Vidéo</h3>{video_section_content}</div>\n<!-- VIDEO-END -->'
+        embed_url = f"https://www.youtube.com/embed/{real_data['videos'][0]['id']}"
+        video_title = real_data['videos'][0]['title']
+        video_section_content = f'<div><h4 class="font-semibold mb-2">Visite de l\'hôtel</h4><div class="video-container aspect-w-16 aspect-h-9"><iframe src="{embed_url}" title="{video_title}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen class="w-full h-full rounded-lg"></iframe></div></div>'
+        # ✅ MODIFICATION : Ajout d'un ID unique au conteneur de la vidéo
+        video_html_block = f'<div id="video-section-wrapper" class="instagram-card p-6"><h3 class="section-title text-xl mb-4">Vidéo</h3>{video_section_content}</div>'
 
     reviews_section = "".join([f'<div class="bg-gray-50 p-4 rounded-lg"><div><span class="font-semibold">{r["author"]}</span> <span class="text-yellow-500">{r["rating"]}</span> <span class="text-gray-500 text-sm float-right">{r.get("date", "")}</span></div><p class="mt-2 text-gray-700">"{r["text"]}"</p></div>' for r in real_data['reviews']])
     
@@ -886,6 +922,7 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
             <div class="space-y-5">
                 <div class="flex items-center"><div class="feature-icon bg-blue-500"><i class="fas fa-plane"></i></div><div class="ml-4"><h4 class="font-semibold text-sm">{flight_text}</h4><p class="text-gray-600 text-xs">Aller-retour inclus</p></div></div>
                 <div class="flex items-center"><div class="feature-icon bg-green-500"><i class="fas fa-bus"></i></div><div class="ml-4"><h4 class="font-semibold text-sm">Transfert aéroport ↔ hôtel</h4><p class="text-gray-600 text-xs">Prise en charge complète</p></div></div>
+                {car_rental_inclusion_html}
                 <div class="flex items-center"><div class="feature-icon bg-purple-500"><i class="fas fa-hotel"></i></div><div class="ml-4"><h4 class="font-semibold text-sm">Hôtel {stars} {data['hotel_name']}</h4><p class="text-gray-600 text-xs">Style traditionnel</p></div></div>
                 <div class="flex items-center"><div class="feature-icon bg-yellow-500"><i class="fas fa-utensils"></i></div><div class="ml-4"><h4 class="font-semibold text-sm">{data.get('surcharge_type', 'Pension complète')}</h4><p class="text-gray-600 text-xs">Inclus dans le forfait</p></div></div>
                 <div class="flex items-center"><div class="feature-icon bg-red-500"><i class="fas fa-suitcase"></i></div><div class="ml-4"><h4 class="font-semibold text-sm">Bagages 10kg</h4><p class="text-gray-600 text-xs">Bagage cabine inclus</p></div></div>
@@ -903,7 +940,7 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
             </div>
             <div class="economy-highlight">💰 Vous économisez {savings} € !</div>
         </div>
-        <div class="instagram-card p-6">
+        <div class="instagram-card p-6" id="gallery-section">
             <h3 class="section-title text-xl mb-4">Galerie de photos</h3>
             <div class="image-grid">{image_gallery}</div>
         </div>
