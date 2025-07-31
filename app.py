@@ -299,7 +299,7 @@ INTERFACE_HTML = r"""
 
                 <h3 class="section-divider"><span>Détails du Vol & Transferts</span></h3>
                 <div class="form-row">
-                    <div class="form-group"><label for="departure_city">✈️ Aéroport de départ</label><input type="text" id="departure_city" name="departure_city" required placeholder="Saisir un aéroport..."></div>
+                    <div class="form-group"><label for="departure_city">✈️ Aéroport de départ</label><input type="text" id="departure_city" name="departure_city" placeholder="Saisir un aéroport..."></div>
                     <div class="form-group"><label for="arrival_airport">🛬 Aéroport d'arrivée</label><input type="text" id="arrival_airport" name="arrival_airport" placeholder="Saisir un aéroport..."></div>
                 </div>
                 <div class="form-row">
@@ -368,22 +368,46 @@ Check-out tardif jusqu'à 14h"></textarea>
         }
 
         function initializeApp() {
+            // ✅ MODIFICATION : Fonction de formatage de date corrigée pour éviter les pbs de fuseau horaire
+            const formatDate = (d) => {
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            };
+
             new Litepicker({
                 element: document.getElementById('date_range'),
                 singleMode: false, lang: 'fr-FR', format: 'DD MMMM YYYY',
                 setup: (picker) => {
                     picker.on('selected', (date1, date2) => {
-                        const formatDate = (d) => d.toISOString().split('T')[0];
                         document.getElementById('date_start').value = formatDate(date1.dateInstance);
                         document.getElementById('date_end').value = formatDate(date2.dateInstance);
                     });
                 },
             });
+
             const hotelInput = document.getElementById('hotel_name');
             const destinationInput = document.getElementById('destination');
             const starsSelect = document.getElementById('stars');
             const departureInput = document.getElementById('departure_city');
             const arrivalInput = document.getElementById('arrival_airport');
+            const flightPriceInput = document.getElementById('flight_price');
+
+            // ✅ MODIFICATION : Logique pour rendre les aéroports obligatoires si le vol > 0
+            const toggleAirportRequirement = () => {
+                const price = parseFloat(flightPriceInput.value) || 0;
+                if (price > 0) {
+                    departureInput.required = true;
+                    arrivalInput.required = true;
+                } else {
+                    departureInput.required = false;
+                    arrivalInput.required = false;
+                }
+            };
+            flightPriceInput.addEventListener('input', toggleAirportRequirement);
+            toggleAirportRequirement(); // Appel initial pour définir l'état de départ
+
             new google.maps.places.Autocomplete(departureInput, { types: ['airport'] });
             new google.maps.places.Autocomplete(arrivalInput, { types: ['airport'] });
             const destinationAutocomplete = new google.maps.places.Autocomplete(destinationInput, { types: ['(regions)'], fields: ['geometry', 'name'] });
@@ -717,6 +741,9 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
     if num_people > 0:
         price_per_person = round(your_price / num_people)
         price_per_person_text = f'<p class="text-sm font-light mt-1">soit {price_per_person} € par personne</p>'
+    
+    full_destination = data.get('destination', '')
+    city_name = full_destination.split(',')[0].strip()
 
     exclusive_services = data.get('exclusive_services', '').strip()
     exclusive_services_html = ""
@@ -733,7 +760,6 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
     arrival_airport_name = data.get('arrival_airport', data['destination']).split(',')[0]
     flight_price = int(data.get('flight_price', 0))
     
-    # ✅ CORRECTION : Logique conditionnelle pour le vol et les bagages
     flight_text_html = ""
     flight_inclusion_html = ""
     baggage_inclusion_html = ""
@@ -745,15 +771,12 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
         flight_inclusion_html = f"""<div class="flex items-center"><div class="feature-icon bg-blue-500"><i class="fas fa-plane"></i></div><div class="ml-4"><h4 class="font-semibold text-sm">{flight_text}</h4><p class="text-gray-600 text-xs">Aller-retour inclus</p></div></div>"""
         baggage_inclusion_html = """<div class="flex items-center"><div class="feature-icon bg-red-500"><i class="fas fa-suitcase"></i></div><div class="ml-4"><h4 class="font-semibold text-sm">Bagages 10kg</h4><p class="text-gray-600 text-xs">Bagage cabine inclus</p></div></div>"""
 
-
-    # ✅ CORRECTION : Logique conditionnelle pour les transferts
     transfer_cost = int(data.get('transfer_cost', 0))
     transfer_text_html = ""
     transfer_inclusion_html = ""
     if transfer_cost > 0:
         transfer_text_html = f"""<div class="flex justify-between"><span>+ Transferts</span><span class="font-semibold">~{transfer_cost}€</span></div>"""
         transfer_inclusion_html = """<div class="flex items-center"><div class="feature-icon bg-green-500"><i class="fas fa-bus"></i></div><div class="ml-4"><h4 class="font-semibold text-sm">Transfert aéroport ↔ hôtel</h4><p class="text-gray-600 text-xs">Prise en charge complète</p></div></div>"""
-
 
     surcharge_type = data.get('surcharge_type', '')
     surcharge_cost = int(data.get('surcharge_cost', 0))
@@ -946,7 +969,7 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
             <div class="space-y-4">{reviews_section}</div>
         </div>
         <div class="instagram-card p-6">
-             <h3 class="section-title text-xl mb-4">Découvrir {data['destination']}</h3>
+             <h3 class="section-title text-xl mb-4">Découvrir {city_name}</h3>
              {destination_section}
         </div>
 
