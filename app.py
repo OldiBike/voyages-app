@@ -358,6 +358,17 @@ Une bouteille de champagne en chambre
 Check-out tardif jusqu'à 14h"></textarea>
                 </div>
 
+                <div class="form-group">
+                    <button type="button" id="toggleInstagramBtn" class="search-btn" style="width: auto; background-color: #f0f0f0; display: inline-flex; align-items: center; gap: 8px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-instagram" viewBox="0 0 16 16"><path d="M8 0C5.829 0 5.556.01 4.703.048 3.85.088 3.269.222 2.76.42a3.9 3.9 0 0 0-1.417.923A3.9 3.9 0 0 0 .42 2.76C.222 3.268.087 3.85.048 4.703.01 5.555 0 5.827 0 8s.01 2.444.048 3.297c.04.852.174 1.433.372 1.942.205.526.478.972.923 1.417.444.445.89.719 1.416.923.51.198 1.09.333 1.942.372C5.555 15.99 5.827 16 8 16s2.444-.01 3.297-.048c.852-.04 1.433-.174 1.942-.372.526-.205.972-.478 1.417-.923.445-.444.718-.891.923-1.417.198-.51.333-1.09.372-1.942C15.99 10.445 16 10.173 16 8s-.01-2.444-.048-3.297c-.04-.852-.174-1.433-.372-1.942a3.9 3.9 0 0 0-.923-1.417A3.9 3.9 0 0 0 13.24.42c-.51-.198-1.09-.333-1.942-.372C10.445.01 10.173 0 8 0zm0 1.442c2.136 0 2.389.007 3.232.046.78.035 1.204.166 1.486.275.373.145.64.319.92.599s.453.546.598.92c.11.282.24.705.275 1.486.039.843.047 1.096.047 3.232s-.008 2.389-.047 3.232c-.035.78-.166 1.203-.275 1.486a2.5 2.5 0 0 1-.598.92 2.5 2.5 0 0 1-.92.598c-.282.11-.705.24-1.486.275-.843.038-1.096.047-3.232.047s-2.389-.008-3.232-.047c-.78-.035-1.203-.166-1.486-.275a2.5 2.5 0 0 1-.92-.598 2.5 2.5 0 0 1-.598-.92c-.11-.282-.24-.705-.275-1.486-.038-.843-.046-1.096-.046-3.232s.008-2.389.046-3.232c.035-.78.166-1.204.275-1.486.145-.373.319-.64.599-.92s.546-.453.92-.598c.282-.11.705-.24 1.486-.275.843-.039 1.096-.046 3.232-.046zM8 4.865a3.135 3.135 0 1 0 0 6.27 3.135 3.135 0 0 0 0-6.27zm0 5.143a2.008 2.008 0 1 1 0-4.016 2.008 2.008 0 0 1 0 4.016zm6.406-4.848a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5z"/></svg>
+                        <span>Ajouter un profil Instagram (Optionnel)</span>
+                    </button>
+                    <div id="instagram_wrapper" style="display:none; margin-top: 15px;">
+                        <label for="instagram_handle">👤 Nom d'utilisateur ou URL du profil Instagram</label>
+                        <input type="text" id="instagram_handle" name="instagram_handle" placeholder="ex: hotel_marbella ou https://instagram.com/hotel_marbella">
+                    </div>
+                </div>
+
                 <button type="submit" class="generate-btn">🚀 Générer</button>
             </form>
         </div>
@@ -402,7 +413,6 @@ Check-out tardif jusqu'à 14h"></textarea>
                 },
             });
 
-            // ✅ MODIFICATION : Ajout de la logique JS pour l'annulation
             new Litepicker({
                 element: document.getElementById('cancellation_date'),
                 singleMode: true,
@@ -418,6 +428,13 @@ Check-out tardif jusqu'à 14h"></textarea>
                 } else {
                     cancellationDateWrapper.style.display = 'none';
                 }
+            });
+
+            // ✅ NOUVELLE FEATURE : Logique JS pour le bouton Instagram
+            document.getElementById('toggleInstagramBtn').addEventListener('click', function() {
+                const wrapper = document.getElementById('instagram_wrapper');
+                const isVisible = wrapper.style.display === 'block';
+                wrapper.style.display = isVisible ? 'none' : 'block';
             });
 
             const hotelInput = document.getElementById('hotel_name');
@@ -757,6 +774,17 @@ def view_file(filename):
 
 def generate_travel_page_real_data(data, real_data, savings, comparison_total):
 
+    # ✅ NOUVELLE LOGIQUE : Séparer le nom de l'hôtel de son adresse pour l'affichage
+    hotel_name_full = data.get('hotel_name', '')
+    hotel_name_parts = hotel_name_full.split(',')
+    display_hotel_name = hotel_name_parts[0].strip()
+    if len(hotel_name_parts) > 1:
+        display_address = ', '.join(hotel_name_parts[1:]).strip()
+    else:
+        # Si le nom de l'hôtel n'a pas de virgule (pas d'adresse), on utilise le champ destination
+        display_address = data.get('destination', '')
+
+
     date_start = datetime.strptime(data['date_start'], '%Y-%m-%d').strftime('%d %B %Y')
     date_end = datetime.strptime(data['date_end'], '%Y-%m-%d').strftime('%d %B %Y')
 
@@ -771,10 +799,33 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
         price_per_person = round(your_price / num_people)
         price_per_person_text = f'<p class="text-sm font-light mt-1">soit {price_per_person} € par personne</p>'
     
+    # ✅ MODIFICATION : Centrer le texte d'annulation
     cancellation_html = ""
     if data.get('has_cancellation') == 'on' and data.get('cancellation_date'):
         cancellation_date = data.get('cancellation_date')
-        cancellation_html = f'<p class="text-xs font-light mt-1">✓ Annulation gratuite jusqu\'au {cancellation_date}</p>'
+        cancellation_html = f'<p class="text-xs font-light mt-1 text-center">✓ Annulation gratuite jusqu\'au {cancellation_date}</p>'
+
+    # ✅ NOUVELLE FEATURE : Logique pour le bouton Instagram
+    instagram_button_html = ""
+    instagram_input = data.get('instagram_handle', '').strip()
+    if instagram_input:
+        # Regex pour extraire le nom d'utilisateur d'une URL
+        match = re.search(r'(?:https?:\/\/)?(?:www\.)?instagram\.com\/([A-Za-z0-9_.-]+)', instagram_input)
+        if match:
+            username = match.group(1)
+        else:
+            # Supposer que c'est le nom d'utilisateur, enlever le @ si présent
+            username = instagram_input.lstrip('@')
+        
+        # Générer le bouton si on a un nom d'utilisateur valide
+        if username:
+            instagram_url = f"https://www.instagram.com/{username}"
+            instagram_button_html = f'''
+            <a href="{instagram_url}" target="_blank" class="block bg-gradient-to-r from-purple-500 via-pink-500 to-red-500 hover:opacity-90 text-white font-bold py-3 px-6 rounded-full text-center" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 0C5.829 0 5.556.01 4.703.048 3.85.088 3.269.222 2.76.42a3.9 3.9 0 0 0-1.417.923A3.9 3.9 0 0 0 .42 2.76C.222 3.268.087 3.85.048 4.703.01 5.555 0 5.827 0 8s.01 2.444.048 3.297c.04.852.174 1.433.372 1.942.205.526.478.972.923 1.417.444.445.89.719 1.416.923.51.198 1.09.333 1.942.372C5.555 15.99 5.827 16 8 16s2.444-.01 3.297-.048c.852-.04 1.433-.174 1.942-.372.526-.205.972-.478 1.417-.923.445-.444.718-.891.923-1.417.198-.51.333-1.09.372-1.942C15.99 10.445 16 10.173 16 8s-.01-2.444-.048-3.297c-.04-.852-.174-1.433-.372-1.942a3.9 3.9 0 0 0-.923-1.417A3.9 3.9 0 0 0 13.24.42c-.51-.198-1.09-.333-1.942-.372C10.445.01 10.173 0 8 0M8 4.865a3.135 3.135 0 1 0 0 6.27 3.135 3.135 0 0 0 0-6.27m0 5.143a2.008 2.008 0 1 1 0-4.016 2.008 2.008 0 0 1 0 4.016m6.406-4.848a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5"/></svg>
+                Voir sur Instagram
+            </a>
+            '''
 
     city_name = data.get('destination', '').split(',')[0].strip()
 
@@ -952,7 +1003,7 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
     html_template = f"""<!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Voyages Privilèges - {data['hotel_name']}</title>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Voyages Privilèges - {display_hotel_name}</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
@@ -1011,13 +1062,14 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
 
         <div class="story-card">
             <img src="{real_data['photos'][0] if real_data['photos'] else ''}" alt="{data['hotel_name']}" style="width: 100%; height: 256px; object-fit: cover; border-radius: 8px; margin-bottom: 1rem;">
-            <h2 class="text-2xl font-bold">{data['hotel_name']} {stars}</h2>
-            <p>📍 {data['destination']}</p>
-            <p>🗓️ Du {date_start} au {date_end}</p>
+            <h2 class="text-2xl font-bold">{display_hotel_name} {stars}</h2>
+            <p>📍 {display_address}</p>
+            <p class="mt-4">🗓️ Du {date_start} au {date_end}</p>
             <div class="text-4xl font-bold mt-2">{data['price']} €</div>
             <p>{price_for_text}</p>
             {price_per_person_text}
             {f'<p class="text-sm mt-2">Note Google: {real_data["hotel_rating"]}/5 ({real_data["total_reviews"]} avis)</p>' if real_data["hotel_rating"] > 0 else ""}
+            <div class="mt-4">{instagram_button_html}</div>
         </div>
         <div class="instagram-card p-6">
             <h3 class="section-title text-xl mb-4">Inclus dans votre séjour</h3>
@@ -1025,7 +1077,7 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
                 {flight_inclusion_html}
                 {transfer_inclusion_html}
                 {car_rental_inclusion_html}
-                <div class="flex items-center"><div class="feature-icon bg-purple-500"><i class="fas fa-hotel"></i></div><div class="ml-4"><h4 class="font-semibold text-sm">Hôtel {stars} {data['hotel_name']}</h4><p class="text-gray-600 text-xs">Style traditionnel</p></div></div>
+                <div class="flex items-center"><div class="feature-icon bg-purple-500"><i class="fas fa-hotel"></i></div><div class="ml-4"><h4 class="font-semibold text-sm">Hôtel {stars} {display_hotel_name}</h4><p class="text-gray-600 text-xs">Style traditionnel</p></div></div>
                 <div class="flex items-center"><div class="feature-icon bg-yellow-500"><i class="fas fa-utensils"></i></div><div class="ml-4"><h4 class="font-semibold text-sm">{data.get('surcharge_type', 'Pension complète')}</h4><p class="text-gray-600 text-xs">Inclus dans le forfait</p></div></div>
                 {baggage_inclusion_html}
             </div>
@@ -1085,14 +1137,14 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
         // Ouvrir la modale
         if (voirPlusBtn) {{
             voirPlusBtn.addEventListener('click', function() {{
-                modal.style.display = 'block';
+                if (modal) modal.style.display = 'block';
                 document.body.style.overflow = 'hidden'; // Bloquer scroll
             }});
         }}
 
         // Fermer la modale
         function closeModal() {{
-            modal.style.display = 'none';
+            if (modal) modal.style.display = 'none';
             document.body.style.overflow = 'auto'; // Restaurer scroll
         }}
 
@@ -1101,15 +1153,17 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
         }}
 
         // Fermer en cliquant à côté
-        modal.addEventListener('click', function(e) {{
-            if (e.target === modal) {{
-                closeModal();
-            }}
-        }});
-
+        if (modal) {{
+            modal.addEventListener('click', function(e) {{
+                if (e.target === modal) {{
+                    closeModal();
+                }}
+            }});
+        }}
+        
         // Fermer avec Escape
         document.addEventListener('keydown', function(e) {{
-            if (e.key === 'Escape' && modal.style.display === 'block') {{
+            if (e.key === 'Escape' && modal && modal.style.display === 'block') {{
                 closeModal();
             }}
         }});
@@ -1120,7 +1174,9 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
                 entries.forEach(function(entry) {{
                     if (entry.isIntersecting) {{
                         const index = Array.from(modalPhotos).indexOf(entry.target) + 1;
-                        photoCounter.textContent = `Photo ${{index}} sur ${{modalPhotos.length}}`;
+                        if (photoCounter) {{
+                            photoCounter.textContent = `Photo ${{index}} sur ${{modalPhotos.length}}`;
+                        }}
                     }}
                 }});
             }}, {{ threshold: 0.5 }});
