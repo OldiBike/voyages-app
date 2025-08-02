@@ -7,6 +7,7 @@ except ImportError:
     print("⚠️ python-dotenv non installé - variables système utilisées (Railway)")
 except Exception as e:
     print(f"⚠️ Erreur chargement .env: {e}")
+
 from flask import Flask, render_template_string, request, jsonify, send_file, session, redirect, url_for
 import requests
 import json
@@ -81,7 +82,8 @@ class RealAPIHotelGatherer:
                 details_response = requests.get(details_url, params=details_params, timeout=15)
                 if details_response.status_code == 200:
                     photos = details_response.json().get('result', {}).get('photos', [])
-                    return [f"https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photoreference={p.get('photo_reference')}&key={self.google_api_key}" for p in photos[:6] if p.get('photo_reference')]
+                    # ✅ MODIFICATION : Récupérer TOUTES les photos, pas seulement 6
+                    return [f"https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photoreference={p.get('photo_reference')}&key={self.google_api_key}" for p in photos if p.get('photo_reference')]
             return []
         except Exception as e:
             print(f"❌ Erreur API Photos: {e}")
@@ -769,7 +771,6 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
         price_per_person = round(your_price / num_people)
         price_per_person_text = f'<p class="text-sm font-light mt-1">soit {price_per_person} € par personne</p>'
     
-    # ✅ MODIFICATION : Ajout de la logique pour l'annulation gratuite
     cancellation_html = ""
     if data.get('has_cancellation') == 'on' and data.get('cancellation_date'):
         cancellation_date = data.get('cancellation_date')
@@ -835,8 +836,24 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
         {surcharge_text_html}
         <hr class="my-3"><div class="flex justify-between text-base font-bold text-red-600"><span>TOTAL ESTIMÉ</span><span>{comparison_total} €</span></div>
     """
+    
+    # ✅ NOUVELLE LOGIQUE GALERIE PHOTOS
+    total_photos = len(real_data['photos'])
+    first_6_photos = real_data['photos'][:6]
+    # Galerie principale (6 photos max)
+    image_gallery = "".join([f'<div class="image-item"><img src="{url}" alt="Photo de {data["hotel_name"]}"></div>\n' for url in first_6_photos]) if first_6_photos else '<p>Aucune photo disponible.</p>'
+    # Bouton "Voir plus" conditionnel
+    more_photos_button = ""
+    if total_photos > 6:
+        more_photos_button = f'''
+        <div class="text-center mt-4">
+            <button id="voirPlusPhotos" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-6 rounded-full transition-colors">
+                📸 Voir plus de photos ({total_photos} au total)
+            </button>
+        </div>'''
+    # Toutes les photos pour la modale
+    modal_all_photos = "".join([f'<img src="{url}" alt="Photo {i+1} de {data["hotel_name"]}" class="modal-photo">' for i, url in enumerate(real_data['photos'])]) if real_data['photos'] else ''
 
-    image_gallery = "".join([f'<div class="image-item"><img src="{url}" alt="Photo de {data["hotel_name"]}"></div>\n' for url in real_data['photos']]) if real_data['photos'] else '<p>Aucune photo disponible.</p>'
 
     video_html_block = ""
     if real_data['videos']:
@@ -949,6 +966,41 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
         .image-item img {{ width: 100%; height: 200px; object-fit: cover; transition: transform 0.3s ease; border-radius: 15px;}}
         .economy-highlight {{ background: linear-gradient(45deg, #ffd700, #ffb347); color: #333; padding: 15px; border-radius: 15px; text-align: center; margin-top: 20px; font-weight: bold;}}
         .feature-icon {{ width: 45px; height: 45px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 18px; flex-shrink: 0; }}
+        
+        /* ✅ NOUVEAUX STYLES MODALE PHOTOS */
+        .modal-photos {{ 
+            display: none; position: fixed; top: 0; left: 0; 
+            width: 100%; height: 100%; background: rgba(0,0,0,0.95); 
+            z-index: 1000; overflow-y: auto; padding: 20px; 
+        }}
+        .modal-photos-content {{ 
+            max-width: 800px; margin: 0 auto; padding-top: 60px; 
+        }}
+        .close-photos {{ 
+            position: fixed; top: 20px; right: 30px; 
+            font-size: 40px; color: white; cursor: pointer; 
+            z-index: 1001; font-weight: bold;
+            width: 50px; height: 50px; display: flex;
+            align-items: center; justify-content: center;
+            background: rgba(0,0,0,0.5); border-radius: 50%;
+        }}
+        .close-photos:hover {{ background: rgba(255,255,255,0.2); }}
+        .modal-photo {{ 
+            width: 100%; margin-bottom: 20px; border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }}
+        .photo-counter {{
+            position: fixed; top: 20px; left: 30px;
+            color: white; background: rgba(0,0,0,0.5);
+            padding: 10px 15px; border-radius: 20px;
+            font-weight: bold; z-index: 1001;
+        }}
+        /* Mobile optimisé */
+        @media (max-width: 768px) {{
+            .close-photos {{ top: 15px; right: 15px; font-size: 30px; width: 40px; height: 40px; }}
+            .photo-counter {{ top: 15px; left: 15px; padding: 8px 12px; font-size: 14px; }}
+            .modal-photos-content {{ padding-top: 80px; padding-left: 10px; padding-right: 10px; }}
+        }}
     </style>
 </head>
 <body>
@@ -992,11 +1044,23 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
             </div>
             <div class="economy-highlight">💰 Vous économisez {savings} € !</div>
         </div>
+        
         <div class="instagram-card p-6" id="gallery-section">
             <h3 class="section-title text-xl mb-4">Galerie de photos</h3>
             <div class="image-grid">{image_gallery}</div>
+            {more_photos_button}
         </div>
+        
+        <div id="photosModal" class="modal-photos">
+            <span class="close-photos" id="closePhotos">×</span>
+            <div class="photo-counter" id="photoCounter">Photo 1 sur {total_photos}</div>
+            <div class="modal-photos-content">
+                {modal_all_photos}
+            </div>
+        </div>
+
         {video_html_block}
+        
         <div class="instagram-card p-6">
             <h3 class="section-title text-xl mb-4">Avis des clients</h3>
             <div class="space-y-4">{reviews_section}</div>
@@ -1008,6 +1072,65 @@ def generate_travel_page_real_data(data, real_data, savings, comparison_total):
 
         {footer_html}
     </div>
+
+    <script>
+    // ✅ JAVASCRIPT MODALE PHOTOS
+    document.addEventListener('DOMContentLoaded', function() {{
+        const voirPlusBtn = document.getElementById('voirPlusPhotos');
+        const modal = document.getElementById('photosModal');
+        const closeBtn = document.getElementById('closePhotos');
+        const photoCounter = document.getElementById('photoCounter');
+        const modalPhotos = document.querySelectorAll('.modal-photo');
+
+        // Ouvrir la modale
+        if (voirPlusBtn) {{
+            voirPlusBtn.addEventListener('click', function() {{
+                modal.style.display = 'block';
+                document.body.style.overflow = 'hidden'; // Bloquer scroll
+            }});
+        }}
+
+        // Fermer la modale
+        function closeModal() {{
+            modal.style.display = 'none';
+            document.body.style.overflow = 'auto'; // Restaurer scroll
+        }}
+
+        if (closeBtn) {{
+            closeBtn.addEventListener('click', closeModal);
+        }}
+
+        // Fermer en cliquant à côté
+        modal.addEventListener('click', function(e) {{
+            if (e.target === modal) {{
+                closeModal();
+            }}
+        }});
+
+        // Fermer avec Escape
+        document.addEventListener('keydown', function(e) {{
+            if (e.key === 'Escape' && modal.style.display === 'block') {{
+                closeModal();
+            }}
+        }});
+
+        // Compteur de photos pendant le scroll
+        if (modalPhotos.length > 0) {{
+            const observer = new IntersectionObserver(function(entries) {{
+                entries.forEach(function(entry) {{
+                    if (entry.isIntersecting) {{
+                        const index = Array.from(modalPhotos).indexOf(entry.target) + 1;
+                        photoCounter.textContent = `Photo ${{index}} sur ${{modalPhotos.length}}`;
+                    }}
+                }});
+            }}, {{ threshold: 0.5 }});
+
+            modalPhotos.forEach(function(photo) {{
+                observer.observe(photo);
+            }});
+        }}
+    }});
+    </script>
 </body>
 </html>"""
     return html_template
